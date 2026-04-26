@@ -1,0 +1,276 @@
+{% extends "base.html" %}
+{% block title %}Настройки — hh-auto{% endblock %}
+{% block content %}
+<h1>Настройки</h1>
+
+<!-- Auth Status -->
+<article>
+    <header><strong>Авторизация hh.ru</strong></header>
+    {% if is_authenticated %}
+        <p>Статус: <span class="badge badge-approved">Подключено</span></p>
+        <details>
+            <summary>Повторный вход</summary>
+            <form method="post" action="/auth/login">
+                <label>Email <input type="email" name="email" required></label>
+                <label>Пароль <input type="password" name="password" required></label>
+                <button type="submit" class="outline">Войти заново</button>
+            </form>
+        </details>
+    {% else %}
+        <p>Статус: <span class="badge badge-declined">Не подключено</span></p>
+        <form method="post" action="/auth/login">
+            <label>Email <input type="email" name="email" required placeholder="your@email.com"></label>
+            <label>Пароль <input type="password" name="password" required></label>
+            <button type="submit" class="primary">Войти на hh.ru</button>
+        </form>
+    {% endif %}
+</article>
+
+<!-- Search Profiles -->
+<article>
+    <header><strong>Поисковые профили</strong></header>
+
+    {% for profile in profiles %}
+    <details>
+        <summary>
+            {{ profile.name }}
+            {% if profile.is_active %}<span class="badge badge-approved">активен</span>{% else %}<span class="badge badge-failed">отключён</span>{% endif %}
+        </summary>
+        <form hx-put="/api/settings/profiles/{{ profile.id }}" hx-swap="none">
+            <label>Название <input type="text" name="name" value="{{ profile.name }}"></label>
+            <label>Поисковый запрос <input type="text" name="search_text" value="{{ profile.search_text or '' }}"></label>
+            <div class="grid">
+                <label>Регион (ID) <input type="number" name="area_id" value="{{ profile.area_id or '' }}"></label>
+                <label>Мин. оценка <input type="number" name="min_relevance_score" value="{{ profile.min_relevance_score }}" step="0.1" min="0" max="1"></label>
+                <label>ID резюме <input type="text" name="resume_id" value="{{ profile.resume_id or '' }}"></label>
+            </div>
+            <div class="grid">
+                <label>Опыт
+                    <select name="experience">
+                        <option value="">Любой</option>
+                        <option value="noExperience" {% if profile.experience == 'noExperience' %}selected{% endif %}>Без опыта</option>
+                        <option value="between1And3" {% if profile.experience == 'between1And3' %}selected{% endif %}>1-3 года</option>
+                        <option value="between3And6" {% if profile.experience == 'between3And6' %}selected{% endif %}>3-6 лет</option>
+                        <option value="moreThan6" {% if profile.experience == 'moreThan6' %}selected{% endif %}>6+ лет</option>
+                    </select>
+                </label>
+                <label>Занятость
+                    <select name="employment">
+                        <option value="">Любая</option>
+                        <option value="full" {% if profile.employment == 'full' %}selected{% endif %}>Полная</option>
+                        <option value="part" {% if profile.employment == 'part' %}selected{% endif %}>Частичная</option>
+                        <option value="project" {% if profile.employment == 'project' %}selected{% endif %}>Проектная</option>
+                        <option value="probation" {% if profile.employment == 'probation' %}selected{% endif %}>Стажировка</option>
+                    </select>
+                </label>
+                <label>График
+                    <select name="schedule">
+                        <option value="">Любой</option>
+                        <option value="remote" {% if profile.schedule == 'remote' %}selected{% endif %}>Удалённая</option>
+                        <option value="fullDay" {% if profile.schedule == 'fullDay' %}selected{% endif %}>Полный день</option>
+                        <option value="flexible" {% if profile.schedule == 'flexible' %}selected{% endif %}>Гибкий</option>
+                    </select>
+                </label>
+            </div>
+            <div class="grid">
+                <label>ЗП от <input type="number" name="salary_from" value="{{ profile.salary_from or '' }}" placeholder="руб."></label>
+                <label>ЗП до <input type="number" name="salary_to" value="{{ profile.salary_to or '' }}" placeholder="руб."></label>
+                <label class="checkbox-inline">
+                    <input type="checkbox" name="only_with_salary" {% if profile.only_with_salary %}checked{% endif %}> Только с ЗП
+                </label>
+            </div>
+            <label>
+                <input type="checkbox" name="is_active" {% if profile.is_active %}checked{% endif %}> Активен
+            </label>
+            <button type="submit" class="primary">Сохранить</button>
+        </form>
+    </details>
+    {% endfor %}
+
+    <details>
+        <summary>+ Добавить профиль</summary>
+        <form hx-post="/api/settings/profiles" hx-swap="none" hx-on::after-request="location.reload()">
+            <label>Название <input type="text" name="name" required></label>
+            <label>Поисковый запрос <input type="text" name="search_text" placeholder="AI инженер Python"></label>
+            <div class="grid">
+                <label>Регион (ID) <input type="number" name="area_id" placeholder="2 = СПб"></label>
+                <label>Мин. оценка <input type="number" name="min_relevance_score" value="0.5" step="0.1" min="0" max="1"></label>
+                <label>ID резюме <input type="text" name="resume_id"></label>
+            </div>
+            <div class="grid">
+                <label>Опыт
+                    <select name="experience">
+                        <option value="">Любой</option>
+                        <option value="noExperience">Без опыта</option>
+                        <option value="between1And3">1-3 года</option>
+                        <option value="between3And6">3-6 лет</option>
+                        <option value="moreThan6">6+ лет</option>
+                    </select>
+                </label>
+                <label>Занятость
+                    <select name="employment">
+                        <option value="">Любая</option>
+                        <option value="full">Полная</option>
+                        <option value="part">Частичная</option>
+                        <option value="project">Проектная</option>
+                        <option value="probation">Стажировка</option>
+                    </select>
+                </label>
+                <label>График
+                    <select name="schedule">
+                        <option value="">Любой</option>
+                        <option value="remote">Удалённая</option>
+                        <option value="fullDay">Полный день</option>
+                        <option value="flexible">Гибкий</option>
+                    </select>
+                </label>
+            </div>
+            <div class="grid">
+                <label>ЗП от <input type="number" name="salary_from" placeholder="руб."></label>
+                <label>ЗП до <input type="number" name="salary_to" placeholder="руб."></label>
+                <label class="checkbox-inline">
+                    <input type="checkbox" name="only_with_salary"> Только с ЗП
+                </label>
+            </div>
+            <button type="submit" class="primary">Создать</button>
+        </form>
+    </details>
+</article>
+
+<!-- Company Rules -->
+<article>
+    <header><strong>Правила компаний</strong></header>
+    <div class="table-wrapper">
+    <table class="table-compact table-hover">
+        <thead>
+            <tr><th>Тип</th><th>Совпадение</th><th>Значение</th><th>Причина</th><th></th></tr>
+        </thead>
+        <tbody>
+            {% for rule in rules %}
+            <tr>
+                <td><span class="badge badge-{{ 'declined' if rule.rule_type == 'blacklist' else 'approved' }}">{{ rule.rule_type }}</span></td>
+                <td>{{ rule.match_type }}</td>
+                <td>{{ rule.match_value }}</td>
+                <td>{{ rule.reason or '—' }}</td>
+                <td>
+                    <button hx-delete="/api/settings/rules/{{ rule.id }}" hx-swap="none"
+                            hx-on::after-request="location.reload()"
+                            class="btn-sm outline contrast">
+                        Удалить
+                    </button>
+                </td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+    </div>
+    <form hx-post="/api/settings/rules" hx-swap="none" hx-on::after-request="location.reload()">
+        <div class="grid">
+            <label>Тип
+                <select name="rule_type">
+                    <option value="blacklist">Чёрный список</option>
+                    <option value="whitelist">Белый список</option>
+                </select>
+            </label>
+            <label>Совпадение
+                <select name="match_type">
+                    <option value="company_name">Название компании</option>
+                    <option value="company_id">ID компании</option>
+                    <option value="keyword_in_title">Слово в названии</option>
+                </select>
+            </label>
+            <label>Значение <input type="text" name="match_value" required></label>
+            <label>Причина <input type="text" name="reason"></label>
+        </div>
+        <button type="submit" class="outline">Добавить правило</button>
+    </form>
+</article>
+
+<!-- Resume Management -->
+<article>
+    <header><strong>Резюме</strong></header>
+    {% if resumes %}
+    <div class="table-wrapper">
+    <table class="table-compact table-hover">
+        <thead>
+            <tr>
+                <th>Название</th>
+                <th>Метка</th>
+                <th>hh_id</th>
+                <th>Основное</th>
+                <th>Видимость</th>
+                <th>Последняя ротация</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for r in resumes %}
+            <tr>
+                <td>{{ r.title }}</td>
+                <td><span class="badge badge-resume">{{ r.short_name }}</span></td>
+                <td><a href="https://hh.ru/resume/{{ r.hh_id }}" target="_blank" class="text-muted">{{ r.hh_id[:12] }}...</a></td>
+                <td>{% if r.is_primary %}Да{% else %}—{% endif %}</td>
+                <td><span class="badge badge-{{ 'approved' if r.visibility_status == 'visible' else 'declined' if r.visibility_status == 'hidden' else 'pending' }}">{{ r.visibility_status }}</span></td>
+                <td>{{ r.last_rotated_at.strftime('%d.%m %H:%M') if r.last_rotated_at else '—' }}</td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+    </div>
+    <div class="control-grid">
+        <button hx-post="/api/resumes/seed" hx-swap="none"
+                hx-on::after-request="location.reload()"
+                class="btn-sm outline">
+            Обновить ключевые слова
+        </button>
+        <button hx-post="/api/resumes/rotate" hx-swap="none"
+                hx-confirm="Запустить ротацию резюме? Текущее вторичное будет скрыто, следующее опубликовано."
+                class="btn-sm outline">
+            Ротация сейчас
+        </button>
+    </div>
+    {% else %}
+    <p>Резюме не найдены.</p>
+    <button hx-post="/api/resumes/seed" hx-swap="none"
+            hx-on::after-request="location.reload()"
+            class="primary">
+        Инициализировать резюме
+    </button>
+    {% endif %}
+</article>
+
+<!-- Scheduler Controls -->
+<article>
+    <header><strong>Управление</strong></header>
+    <div id="pipeline-status-msg"></div>
+    <div class="control-grid">
+        <button hx-post="/api/pipeline/search" hx-swap="none"
+                hx-on::after-request="showPipelineMsg(this, 'Поиск запущен')"
+                class="primary">
+            Запустить поиск
+        </button>
+        <button hx-post="/api/pipeline/apply" hx-swap="none"
+                hx-on::after-request="showPipelineMsg(this, 'Отклики отправляются')"
+                class="secondary">
+            Отправить отклики
+        </button>
+        <button hx-post="/api/pipeline/status-check" hx-swap="none"
+                hx-on::after-request="showPipelineMsg(this, 'Проверка статусов запущена')"
+                class="outline">
+            Проверить статусы
+        </button>
+        <button hx-post="/api/pipeline/archive-check" hx-swap="none"
+                hx-on::after-request="showPipelineMsg(this, 'Проверка архивности запущена')"
+                class="outline">
+            Проверить архивность
+        </button>
+    </div>
+    <script>
+    function showPipelineMsg(btn, msg) {
+        var el = document.getElementById('pipeline-status-msg');
+        el.innerHTML = '<p class="text-success"><strong>✓</strong> ' + msg + '</p>';
+        btn.setAttribute('aria-busy', 'false');
+        setTimeout(function() { el.innerHTML = ''; }, 5000);
+    }
+    </script>
+</article>
+{% endblock %}

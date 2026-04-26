@@ -1,0 +1,61 @@
+version: "3.8"
+
+services:
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: hh-auto
+    restart: unless-stopped
+    ports:
+      - "8100:8100"
+    environment:
+      - HH_AUTO_DATABASE_URL=postgresql+asyncpg://hh_auto:${POSTGRES_PASSWORD}@postgres:5432/hh_auto
+      - HH_AUTO_HH_EMAIL=${HH_EMAIL}
+      - HH_AUTO_HH_PASSWORD=${HH_PASSWORD}
+      - HH_AUTO_OPENROUTER_API_KEY=${OPENROUTER_API_KEY}
+      - HH_AUTO_TELEGRAM_BOT_TOKEN=${TELEGRAM_BOT_TOKEN}
+      - HH_AUTO_TELEGRAM_CHAT_ID=${TELEGRAM_CHAT_ID}
+      - HTTP_PROXY=http://xray-client:10809
+      - HTTPS_PROXY=http://xray-client:10809
+      - NO_PROXY=localhost,127.0.0.1,postgres
+    volumes:
+      - ./data:/app/data
+      - ./logs:/app/logs
+    depends_on:
+      postgres:
+        condition: service_healthy
+    networks:
+      - default
+      - xray-proxy
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8100/health"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+
+  postgres:
+    image: postgres:16-alpine
+    container_name: hh-auto-postgres
+    restart: unless-stopped
+    environment:
+      - POSTGRES_USER=hh_auto
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
+      - POSTGRES_DB=hh_auto
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U hh_auto"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - default
+
+volumes:
+  postgres_data:
+
+networks:
+  xray-proxy:
+    external: true
+    name: claude-code-nas_claude-network

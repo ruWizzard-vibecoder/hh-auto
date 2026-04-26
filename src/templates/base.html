@@ -1,0 +1,113 @@
+<!DOCTYPE html>
+<html lang="ru" data-theme="dark">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{% block title %}hh-auto{% endblock %}</title>
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@picocss/pico@2/css/pico.slate.min.css">
+    <link rel="stylesheet" href="/static/style.css">
+    <script src="/static/htmx.min.js"></script>
+    <style>
+        .htmx-toast {
+            position: fixed; bottom: 20px; right: 20px; z-index: 9999;
+            padding: 12px 20px; border-radius: 8px; color: #fff;
+            font-size: 14px; max-width: 400px; animation: fadeIn .2s;
+        }
+        .htmx-toast--error { background: #c0392b; }
+        .htmx-toast--success { background: #27ae60; }
+        @keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
+        .htmx-request { opacity: 0.6; pointer-events: none; }
+    </style>
+    <script>
+        function showToast(msg, type) {
+            var t = document.createElement('div');
+            t.className = 'htmx-toast htmx-toast--' + (type || 'error');
+            t.textContent = msg;
+            document.body.appendChild(t);
+            setTimeout(function() { t.remove(); }, 4000);
+        }
+        // Network error — request never reached server
+        document.addEventListener('htmx:sendError', function(e) {
+            e.detail.elt.classList.remove('htmx-request');
+            showToast('Ошибка сети — действие не выполнено. Попробуйте ещё раз.');
+        });
+        // Server returned error status
+        document.addEventListener('htmx:responseError', function(e) {
+            e.detail.elt.classList.remove('htmx-request');
+            showToast('Ошибка сервера (' + e.detail.xhr.status + ') — действие не выполнено.');
+        });
+        // Swap error — response can't replace target
+        document.addEventListener('htmx:swapError', function(e) {
+            showToast('Ошибка обновления — перезагрузите страницу.');
+        });
+        // Confirm successful actions
+        document.addEventListener('htmx:afterSwap', function(e) {
+            var verb = e.detail.requestConfig && e.detail.requestConfig.verb;
+            var path = e.detail.pathInfo && e.detail.pathInfo.requestPath;
+            if (verb === 'post' && path && path.includes('/cover-letters/')) {
+                if (path.includes('/approve')) showToast('Письмо одобрено', 'success');
+                else if (path.includes('/reject')) showToast('Письмо отклонено', 'success');
+                else if (path.includes('/no-letter')) showToast('Отклик без письма', 'success');
+                else if (path.includes('/edit')) showToast('Письмо сохранено', 'success');
+            }
+        });
+    </script>
+</head>
+<body>
+    <div class="app-layout">
+        <aside class="sidebar" id="sidebar">
+            <div class="sidebar-brand">
+                <span class="brand-icon">HH</span>
+                <span class="brand-text">hh-auto</span>
+            </div>
+            <nav class="sidebar-nav">
+                <a href="/" class="sidebar-nav-item {% if request.url.path == '/' %}active{% endif %}">
+                    <span class="nav-icon">&#9776;</span>
+                    <span class="nav-text">Главная</span>
+                </a>
+                <a href="/cover-letters" class="sidebar-nav-item {% if request.url.path.startswith('/cover-letters') %}active{% endif %}">
+                    <span class="nav-icon">&#9993;</span>
+                    <span class="nav-text">Письма</span>
+                    {% if pending_count %}<span class="badge badge-pending">{{ pending_count }}</span>{% endif %}
+                </a>
+                <a href="/vacancies" class="sidebar-nav-item {% if request.url.path.startswith('/vacancies') %}active{% endif %}">
+                    <span class="nav-icon">&#128188;</span>
+                    <span class="nav-text">Вакансии</span>
+                </a>
+                <a href="/applications" class="sidebar-nav-item {% if request.url.path.startswith('/applications') %}active{% endif %}">
+                    <span class="nav-icon">&#10004;</span>
+                    <span class="nav-text">Отклики</span>
+                </a>
+                <a href="/summaries" class="sidebar-nav-item {% if request.url.path.startswith('/summaries') %}active{% endif %}">
+                    <span class="nav-icon">&#128202;</span>
+                    <span class="nav-text">Сводки</span>
+                </a>
+                <a href="/analytics" class="sidebar-nav-item {% if request.url.path.startswith('/analytics') %}active{% endif %}">
+                    <span class="nav-icon">&#128200;</span>
+                    <span class="nav-text">Аналитика</span>
+                </a>
+                <a href="/settings" class="sidebar-nav-item {% if request.url.path.startswith('/settings') %}active{% endif %}">
+                    <span class="nav-icon">&#9881;</span>
+                    <span class="nav-text">Настройки</span>
+                </a>
+            </nav>
+            <div class="sidebar-footer">
+                <span hx-get="/api/status" hx-trigger="load, every 60s" hx-swap="innerHTML">Загрузка...</span>
+            </div>
+        </aside>
+
+        <header class="mobile-topbar">
+            <button class="sidebar-toggle" onclick="document.getElementById('sidebar').classList.toggle('sidebar-open');document.getElementById('sidebar-backdrop').classList.toggle('sidebar-backdrop-visible')">&#9776;</button>
+            <span class="brand-text">hh-auto</span>
+        </header>
+
+        <div class="sidebar-backdrop" id="sidebar-backdrop" onclick="document.getElementById('sidebar').classList.remove('sidebar-open');this.classList.remove('sidebar-backdrop-visible')"></div>
+
+        <main class="main-content">
+            <div class="container">
+                {% block content %}{% endblock %}
+            </div>
+        </main>
+    </div>
+</body>
+</html>

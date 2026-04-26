@@ -1,0 +1,57 @@
+{% extends "base.html" %}
+{% block title %}Отклики — hh-auto{% endblock %}
+{% block content %}
+{% set sq = '&q=' ~ current_search if current_search else '' %}
+<h1>Отклики ({{ total }})</h1>
+
+<form action="/applications" method="get" class="search-form">
+    <input type="search" name="q" value="{{ current_search }}"
+           placeholder="Поиск по названию или компании..." class="search-input">
+    {% if current_status %}<input type="hidden" name="status" value="{{ current_status }}">{% endif %}
+</form>
+
+<div class="filter-bar">
+    <a href="/applications?status=sent{{ sq }}" class="filter-pill {% if current_status == 'sent' %}active{% endif %}">Отправлены</a>
+    <a href="/applications?status=viewed{{ sq }}" class="filter-pill {% if current_status == 'viewed' %}active{% endif %}">Просмотрены</a>
+    <a href="/applications?status=invited{{ sq }}" class="filter-pill {% if current_status == 'invited' %}active{% endif %}">Приглашения</a>
+    <a href="/applications?status=declined{{ sq }}" class="filter-pill {% if current_status == 'declined' %}active{% endif %}">Отказы</a>
+    <a href="/applications{% if current_search %}?q={{ current_search }}{% endif %}" class="filter-pill {% if not current_status %}active{% endif %}">Все</a>
+</div>
+
+<div class="table-wrapper">
+<table class="table-compact table-hover table-zebra">
+    <thead>
+        <tr>
+            <th>Вакансия</th>
+            <th>Компания</th>
+            <th>Резюме</th>
+            <th>Статус</th>
+            <th>Отправлено</th>
+            <th>Способ</th>
+        </tr>
+    </thead>
+    <tbody>
+        {% for app in applications %}
+        <tr>
+            <td>
+                <a href="{{ app.vacancy.url }}" target="_blank">{{ app.vacancy.title }}</a>
+            </td>
+            <td>{{ app.vacancy.company_name or '—' }}</td>
+            <td>
+                {% if app.resume_id and resume_names.get(app.resume_id) %}
+                <span class="badge badge-resume">{{ resume_names[app.resume_id] }}</span>
+                {% else %}—{% endif %}
+            </td>
+            <td><span class="badge badge-{{ app.status }}">{{ app.status }}</span></td>
+            <td>{{ app.applied_at.strftime('%d.%m %H:%M') if app.applied_at else '—' }}</td>
+            <td>{{ app.applied_via }}</td>
+        </tr>
+        {% endfor %}
+    </tbody>
+</table>
+</div>
+
+{% if not applications %}
+<p>Пока нет откликов.</p>
+{% endif %}
+{% endblock %}

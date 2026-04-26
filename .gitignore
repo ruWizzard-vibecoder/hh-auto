@@ -1,0 +1,39 @@
+# Secrets & credentials
+.env
+.env.local
+.env.*.local
+
+# Runtime data (cookies, OAuth tokens, debug dumps)
+data/browser_state/
+data/hh_oauth_token.json
+data/debug_*
+data/*.png
+data/*.html
+data/rescore.log
+data/rescore.py
+
+# Resume snapshots (session-specific)
+RESUME.md.prev
+
+# Backup files
+*.bak
+*.bak-*
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+.ruff_cache/
+.pytest_cache/
+*.egg-info/
+.venv/
+venv/
+
+# Logs
+logs/
+*.log
+
+# IDE
+.vscode/
+.idea/
+.DS_Store

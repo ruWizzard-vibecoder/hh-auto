@@ -1,0 +1,122 @@
+{% extends "base.html" %}
+{% block title %}Сводки — hh-auto{% endblock %}
+{% block content %}
+<h1>Дневные сводки</h1>
+
+<div class="filter-bar">
+    <button hx-post="/api/summaries/generate"
+            hx-swap="none"
+            hx-on::after-request="location.reload()"
+            class="primary">
+        Сформировать сводку за сегодня
+    </button>
+</div>
+
+{% if summaries %}
+<div>
+    {% for s in summaries %}
+    <article>
+        <header>
+            <div class="summary-header">
+                <strong>{{ s.summary_date.strftime('%d %B %Y') }}</strong>
+                <div class="summary-meta">
+                    <span>Вакансий: <strong>{{ s.vacancies_discovered }}</strong></span>
+                    <span>Откликов: <strong>{{ s.applications_sent }}</strong></span>
+                    <span>Ответов: <strong>{{ s.responses_received }}</strong></span>
+                    <span>Ср. оценка: <strong class="{% if s.avg_relevance_score and s.avg_relevance_score >= 0.7 %}score-high{% elif s.avg_relevance_score and s.avg_relevance_score >= 0.5 %}score-medium{% else %}score-low{% endif %}">
+                        {{ "%.0f"|format((s.avg_relevance_score or 0) * 100) }}%
+                    </strong></span>
+                </div>
+            </div>
+        </header>
+
+        <details>
+            <summary>Показать полный отчёт</summary>
+
+            <div class="summary-content">
+                {{ s.summary_text | replace('\n', '<br>') | safe }}
+            </div>
+
+            {% if s.top_vacancies %}
+            <h4>Лучшие вакансии</h4>
+            <div class="table-wrapper">
+            <table class="table-compact table-hover">
+                <thead>
+                    <tr><th>Вакансия</th><th>Компания</th><th>Оценка</th><th>Почему интересна</th></tr>
+                </thead>
+                <tbody>
+                    {% for v in s.top_vacancies %}
+                    <tr>
+                        <td>
+                            {% if v.url %}<a href="{{ v.url }}" target="_blank">{{ v.title }}</a>{% else %}{{ v.title }}{% endif %}
+                        </td>
+                        <td>{{ v.company or '—' }}</td>
+                        <td>
+                            {% if v.score %}
+                            <span class="{% if v.score >= 0.7 %}score-high{% elif v.score >= 0.5 %}score-medium{% else %}score-low{% endif %}">
+                                {{ "%.0f"|format(v.score * 100) }}%
+                            </span>
+                            {% endif %}
+                        </td>
+                        <td>{{ v.why_promising or '—' }}</td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+            </div>
+            {% endif %}
+
+            {% if s.interview_prep %}
+            <h4>Подготовка к собеседованиям</h4>
+            {% for prep in s.interview_prep %}
+            <div class="cover-letter-card">
+                <header>
+                    <strong>{{ prep.vacancy_title }}</strong> @ {{ prep.company or '?' }}
+                </header>
+
+                {% if prep.questions_to_prepare %}
+                <p><strong>Вопросы для подготовки:</strong></p>
+                <ul>
+                    {% for q in prep.questions_to_prepare %}
+                    <li>{{ q }}</li>
+                    {% endfor %}
+                </ul>
+                {% endif %}
+
+                {% if prep.projects_to_highlight %}
+                <p><strong>Проекты для упоминания:</strong></p>
+                <ul>
+                    {% for p in prep.projects_to_highlight %}
+                    <li>{{ p }}</li>
+                    {% endfor %}
+                </ul>
+                {% endif %}
+
+                {% if prep.tech_topics_to_review %}
+                <p><strong>Темы для повторения:</strong></p>
+                <ul>
+                    {% for t in prep.tech_topics_to_review %}
+                    <li>{{ t }}</li>
+                    {% endfor %}
+                </ul>
+                {% endif %}
+
+                {% if prep.company_research %}
+                <p><strong>О компании:</strong> {{ prep.company_research }}</p>
+                {% endif %}
+            </div>
+            {% endfor %}
+            {% endif %}
+
+            {% if s.insights %}
+            <h4>Выводы и рекомендации</h4>
+            <div class="cover-letter-text">{{ s.insights }}</div>
+            {% endif %}
+        </details>
+    </article>
+    {% endfor %}
+</div>
+{% else %}
+<p>Сводок пока нет. Нажмите «Сформировать сводку» после первого цикла поиска.</p>
+{% endif %}
+{% endblock %}

@@ -1,0 +1,118 @@
+{% extends "base.html" %}
+{% block title %}Аналитика — hh-auto{% endblock %}
+{% block content %}
+<h1>Аналитика</h1>
+
+<div class="stats-grid">
+    <div class="stat-card stat-card--blue">
+        <h2>{{ stats.total_vacancies }}</h2>
+        <p>Всего вакансий</p>
+    </div>
+    <div class="stat-card stat-card--green">
+        <h2>{{ stats.applications_sent }}</h2>
+        <p>Откликов отправлено</p>
+    </div>
+    <div class="stat-card stat-card--teal">
+        <h2>{{ "%.0f"|format(stats.response_rate) }}%</h2>
+        <p>Процент ответов</p>
+    </div>
+    <div class="stat-card stat-card--purple">
+        <h2>{{ "%.0f"|format(stats.avg_score * 100) }}%</h2>
+        <p>Средняя оценка</p>
+    </div>
+    <div class="stat-card stat-card--peach">
+        <h2>{{ stats.invited }}</h2>
+        <p>Приглашений</p>
+    </div>
+    <div class="stat-card stat-card--yellow">
+        <h2>{{ stats.letters_approved }}</h2>
+        <p>Писем одобрено</p>
+    </div>
+</div>
+
+<article>
+    <header><strong>Отклики по дням</strong></header>
+    {% if daily_stats %}
+    <div class="bar-chart">
+        {% for day in daily_stats %}
+        {% set day_max = [day.sent, day.viewed, day.invited, day.declined] | max %}
+        {% set scale_max = max_daily if max_daily else (day_max if day_max > 0 else 1) %}
+        <div class="bar-col">
+            <div class="bar-group">
+                <div class="bar-fill bar-fill--sent" style="--h: {{ (day.sent / scale_max * 100) if scale_max else 0 }}%" title="Отправлено: {{ day.sent }}"></div>
+                <div class="bar-fill bar-fill--viewed" style="--h: {{ (day.viewed / scale_max * 100) if scale_max else 0 }}%" title="Просмотрено: {{ day.viewed }}"></div>
+                <div class="bar-fill bar-fill--invited" style="--h: {{ (day.invited / scale_max * 100) if scale_max else 0 }}%" title="Приглашения: {{ day.invited }}"></div>
+                <div class="bar-fill bar-fill--declined" style="--h: {{ (day.declined / scale_max * 100) if scale_max else 0 }}%" title="Отказы: {{ day.declined }}"></div>
+            </div>
+            <span class="bar-label">{{ day.date }}</span>
+        </div>
+        {% endfor %}
+    </div>
+    <details>
+        <summary>Таблица</summary>
+        <div class="table-wrapper">
+        <table class="table-compact">
+            <thead>
+                <tr><th>Дата</th><th>Отправлено</th><th>Просмотрено</th><th>Приглашения</th><th>Отказы</th></tr>
+            </thead>
+            <tbody>
+                {% for day in daily_stats %}
+                <tr>
+                    <td>{{ day.date }}</td>
+                    <td>{{ day.sent }}</td>
+                    <td>{{ day.viewed }}</td>
+                    <td>{{ day.invited }}</td>
+                    <td>{{ day.declined }}</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+        </div>
+    </details>
+    {% else %}
+    <p>Нет данных за последние 14 дней.</p>
+    {% endif %}
+</article>
+
+<article>
+    <header><strong>Топ компаний по откликам</strong></header>
+    {% if top_companies %}
+    <div class="table-wrapper">
+    <table class="table-compact table-hover">
+        <thead>
+            <tr><th>Компания</th><th>Откликов</th><th>Ответов</th></tr>
+        </thead>
+        <tbody>
+            {% for company in top_companies %}
+            <tr>
+                <td>{{ company.name }}</td>
+                <td>{{ company.count }}</td>
+                <td>{{ company.responses }}</td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+    </div>
+    {% else %}
+    <p>Нет данных по компаниям.</p>
+    {% endif %}
+</article>
+
+<article>
+    <header><strong>Распределение оценок</strong></header>
+    {% set max_count = score_distribution | map(attribute='count') | max if score_distribution else 1 %}
+    <div class="score-distribution">
+        {% for bucket in score_distribution %}
+        <div class="progress-row">
+            <span class="progress-label">{{ bucket.range }}</span>
+            <div class="progress-track">
+                <div class="progress-fill" style="--w: {{ (bucket.count / max_count * 100) if max_count else 0 }}%">
+                    {{ bucket.count }}
+                </div>
+            </div>
+            <span class="progress-meta">{{ bucket.applied }} отпр.</span>
+        </div>
+        {% endfor %}
+    </div>
+</article>
+{% endblock %}

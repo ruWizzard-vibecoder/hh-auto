@@ -1,0 +1,176 @@
+{% extends "base.html" %}
+{% block title %}Вакансии — hh-auto{% endblock %}
+{% block content %}
+{% set sq = '&q=' ~ current_search if current_search else '' %}
+<h1>Вакансии ({{ total }})</h1>
+
+<form action="/vacancies" method="get" class="search-form">
+    <input type="search" name="q" value="{{ current_search }}"
+           placeholder="Поиск по названию или компании..." class="search-input">
+    {% if current_status %}<input type="hidden" name="status" value="{{ current_status }}">{% endif %}
+    {% if current_employment %}<input type="hidden" name="employment" value="{{ current_employment }}">{% endif %}
+</form>
+
+<div class="filter-bar">
+    <a href="/vacancies?status=scored{% if current_employment %}&employment={{ current_employment }}{% endif %}{{ sq }}" class="filter-pill {% if current_status == 'scored' %}active{% endif %}">Оценённые</a>
+    <a href="/vacancies?status=queued{% if current_employment %}&employment={{ current_employment }}{% endif %}{{ sq }}" class="filter-pill {% if current_status == 'queued' %}active{% endif %}">В очереди</a>
+    <a href="/vacancies?status=applied{% if current_employment %}&employment={{ current_employment }}{% endif %}{{ sq }}" class="filter-pill {% if current_status == 'applied' %}active{% endif %}">Отправлены</a>
+    <a href="/vacancies?status=skipped{% if current_employment %}&employment={{ current_employment }}{% endif %}{{ sq }}" class="filter-pill {% if current_status == 'skipped' %}active{% endif %}">Пропущены</a>
+    <a href="/vacancies?status=archived{% if current_employment %}&employment={{ current_employment }}{% endif %}{{ sq }}" class="filter-pill {% if current_status == 'archived' %}active{% endif %}">Архив</a>
+    <a href="/vacancies{% if current_employment %}?employment={{ current_employment }}{{ sq }}{% elif current_search %}?q={{ current_search }}{% endif %}" class="filter-pill {% if not current_status and not current_employment %}active{% endif %}">Все</a>
+</div>
+
+{% if employment_counts %}
+<div class="filter-bar">
+    <span class="filter-label">Занятость:</span>
+    {% if employment_counts.get('part') %}
+    <a href="/vacancies?employment=part{% if current_status %}&status={{ current_status }}{% endif %}{{ sq }}" class="filter-pill filter-pill--sm {% if current_employment == 'part' %}active{% endif %}">
+        Частичная ({{ employment_counts.part }})
+    </a>
+    {% endif %}
+    {% if employment_counts.get('project') %}
+    <a href="/vacancies?employment=project{% if current_status %}&status={{ current_status }}{% endif %}{{ sq }}" class="filter-pill filter-pill--sm {% if current_employment == 'project' %}active{% endif %}">
+        Проектная ({{ employment_counts.project }})
+    </a>
+    {% endif %}
+    {% if employment_counts.get('full') %}
+    <a href="/vacancies?employment=full{% if current_status %}&status={{ current_status }}{% endif %}{{ sq }}" class="filter-pill filter-pill--sm {% if current_employment == 'full' %}active{% endif %}">
+        Полная ({{ employment_counts.full }})
+    </a>
+    {% endif %}
+    {% if current_employment %}
+    <a href="/vacancies{% if current_status %}?status={{ current_status }}{{ sq }}{% elif current_search %}?q={{ current_search }}{% endif %}" class="filter-pill filter-pill--sm filter-pill--reset">
+        Сбросить
+    </a>
+    {% endif %}
+</div>
+{% endif %}
+
+<div class="filter-bar">
+    <span class="filter-label">Группировка:</span>
+    {% if current_group == 'company' %}
+    <a href="/vacancies?{% if current_status %}status={{ current_status }}&{% endif %}{% if current_employment %}employment={{ current_employment }}&{% endif %}{% if current_search %}q={{ current_search }}{% endif %}" class="filter-pill filter-pill--sm active">
+        По компаниям
+    </a>
+    {% else %}
+    <a href="/vacancies?group=company{% if current_status %}&status={{ current_status }}{% endif %}{% if current_employment %}&employment={{ current_employment }}{% endif %}{{ sq }}" class="filter-pill filter-pill--sm">
+        По компаниям
+    </a>
+    {% endif %}
+</div>
+
+{% macro render_vacancy_row(v) %}
+<tr>
+    <td>
+        <a href="{{ v.url }}" target="_blank">{{ v.title }}</a>
+        {% if v.schedule == 'remote' %}<small class="text-muted">(удалённо)</small>{% endif %}
+        {% if v.description %}
+        <details class="vacancy-details">
+            <summary>Описание</summary>
+            <div class="vacancy-description">{{ v.description | safe }}</div>
+        </details>
+        {% endif %}
+    </td>
+    <td>{{ v.company_name or '—' }}</td>
+    <td>
+        {% if v.salary_from or v.salary_to %}
+            {{ v.salary_from or '?' }}–{{ v.salary_to or '?' }} {{ v.salary_currency or '' }}
+        {% else %}—{% endif %}
+    </td>
+    <td>
+        {% if v.relevance_score %}
+        <span class="{% if v.relevance_score >= 0.7 %}score-high{% elif v.relevance_score >= 0.5 %}score-medium{% else %}score-low{% endif %}">
+            {{ "%.0f"|format(v.relevance_score * 100) }}%
+        </span>
+        {% else %}—{% endif %}
+    </td>
+    <td>
+        {% if v.recommended_resume_id and resume_names.get(v.recommended_resume_id) %}
+        <span class="badge badge-resume">{{ resume_names[v.recommended_resume_id] }}</span>
+        {% else %}—{% endif %}
+    </td>
+    <td>
+        {% if v.employment == 'part' %}<span class="badge badge-parttime">Частичная</span> {% endif %}
+        {% if v.employment == 'project' %}<span class="badge badge-project">Проект</span> {% endif %}
+        {% if v.matched_skills %}
+        <div class="skills-matched">{{ v.matched_skills | join(', ') }}</div>
+        {% endif %}
+        {% if v.missing_skills %}
+        <div class="skills-missing">{{ v.missing_skills | join(', ') }}</div>
+        {% endif %}
+        {% if not v.matched_skills and not v.missing_skills and v.employment not in ['part', 'project'] %}—{% endif %}
+    </td>
+    <td><span class="badge badge-{{ v.status }}">{{ v.status }}</span></td>
+    <td>
+        {% if v.status == 'scored' %}
+        <button hx-post="/api/vacancies/{{ v.id }}/generate-letter"
+                hx-swap="none" class="btn-sm outline primary">
+            Создать письмо
+        </button>
+        {% endif %}
+        <button hx-post="/api/vacancies/{{ v.id }}/blacklist"
+                hx-swap="none"
+                hx-confirm="Заблокировать {{ v.company_name }}?"
+                class="btn-sm outline contrast">
+            В ЧС
+        </button>
+    </td>
+</tr>
+{% endmacro %}
+
+{% if grouped %}
+    {% for company, company_vacancies in grouped.items() %}
+    <h4 class="group-header">{{ company }} ({{ company_vacancies|length }})</h4>
+    <div class="table-wrapper">
+    <table class="table-compact table-hover">
+        <thead>
+            <tr>
+                <th>Вакансия</th>
+                <th>Компания</th>
+                <th>Зарплата</th>
+                <th>Оценка</th>
+                <th>Резюме</th>
+                <th>Детали</th>
+                <th>Статус</th>
+                <th>Действия</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for v in company_vacancies %}
+                {{ render_vacancy_row(v) }}
+            {% endfor %}
+        </tbody>
+    </table>
+    </div>
+    {% endfor %}
+{% else %}
+<div class="table-wrapper">
+<table class="table-compact table-hover">
+    <thead>
+        <tr>
+            <th>Вакансия</th>
+            <th>Компания</th>
+            <th>Зарплата</th>
+            <th>Оценка</th>
+            <th>Резюме</th>
+            <th>Детали</th>
+            <th>Статус</th>
+            <th>Действия</th>
+        </tr>
+    </thead>
+    <tbody>
+        {% for v in vacancies %}
+            {{ render_vacancy_row(v) }}
+        {% endfor %}
+    </tbody>
+</table>
+</div>
+{% endif %}
+
+{% if not grouped and (page > 0 or has_more) %}
+<div class="pagination">
+    {% if page > 0 %}<a href="/vacancies?page={{ page - 1 }}&status={{ current_status or '' }}&employment={{ current_employment or '' }}{{ sq }}" role="button" class="outline">Назад</a>{% endif %}
+    {% if has_more %}<a href="/vacancies?page={{ page + 1 }}&status={{ current_status or '' }}&employment={{ current_employment or '' }}{{ sq }}" role="button" class="outline">Далее</a>{% endif %}
+</div>
+{% endif %}
+{% endblock %}
