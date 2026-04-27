@@ -509,12 +509,20 @@ class HHBrowser:
         except Exception:
             pass
 
-    async def get_negotiations(self) -> list[BrowserNegotiation]:
-        """Parse negotiations (responses) page via browser."""
+    async def get_negotiations(
+        self, max_pages: int = 5
+    ) -> list[BrowserNegotiation]:
+        """Parse the applicant negotiations page (post-April 2026 magritte UI).
+
+        Walks through paginated results clicking the numbered page buttons.
+        Status is read from data-qa tag classes and mapped directly to our
+        internal status codes (sent / viewed / invited / declined).
+        """
         await self._ensure_browser()
         page = await self._context.new_page()
 
-        negotiations = []
+        all_negotiations: list[BrowserNegotiation] = []
+        seen_ids: set[str] = set()
         try:
             await page.goto(
                 "https://hh.ru/applicant/negotiations",
@@ -522,57 +530,103 @@ class HHBrowser:
             )
             await page.wait_for_timeout(2000)
 
-            # Parse each negotiation item
-            items = page.locator('[data-qa="negotiations-list-item"]')
-            count = await items.count()
-            logger.info(f"Found {count} negotiations on page")
+            page_num = 1
+            while page_num <= max_pages:
+                items_on_page = await self._parse_negotiations_dom(page, page_num)
+                added = 0
+                for n in items_on_page:
+                    if n.vacancy_id and n.vacancy_id in seen_ids:
+                        continue
+                    if n.vacancy_id:
+                        seen_ids.add(n.vacancy_id)
+                    all_negotiations.append(n)
+                    added += 1
+                logger.info(
+                    f"Negotiations page {page_num}: {len(items_on_page)} items "
+                    f"({added} new, total so far: {len(all_negotiations)})"
+                )
 
-            for i in range(count):
-                item = items.nth(i)
+                # Try to advance to the next numbered page button
+                next_btn = page.locator(
+                    f'[data-qa~="number-pages-{page_num + 1}"]'
+                )
+                if await next_btn.count() == 0:
+                    break
                 try:
-                    # Vacancy title and link
-                    title_el = item.locator('[data-qa="negotiations-item-title"]')
-                    vacancy_name = await title_el.inner_text() if await title_el.count() > 0 else ""
-                    vacancy_url = ""
-                    if await title_el.count() > 0:
-                        link = title_el.locator("a")
-                        if await link.count() > 0:
-                            vacancy_url = await link.get_attribute("href") or ""
-
-                    # Employer name
-                    employer_el = item.locator('[data-qa="negotiations-item-company"]')
-                    employer_name = await employer_el.inner_text() if await employer_el.count() > 0 else ""
-
-                    # Status
-                    status_el = item.locator('[data-qa="negotiations-item-status"]')
-                    state = await status_el.inner_text() if await status_el.count() > 0 else "unknown"
-
-                    # Extract vacancy ID from URL
-                    vacancy_id = ""
-                    if vacancy_url:
-                        parts = vacancy_url.rstrip("/").split("/")
-                        # URL like /vacancy/12345 or https://hh.ru/vacancy/12345
-                        for j, part in enumerate(parts):
-                            if part == "vacancy" and j + 1 < len(parts):
-                                vacancy_id = parts[j + 1].split("?")[0]
-                                break
-
-                    negotiations.append(BrowserNegotiation(
-                        vacancy_id=vacancy_id,
-                        state=state.strip().lower(),
-                        vacancy_name=vacancy_name.strip(),
-                        employer_name=employer_name.strip(),
-                        vacancy_url=vacancy_url,
-                    ))
+                    await next_btn.first.click()
+                    await page.wait_for_timeout(2000)
                 except Exception as e:
-                    logger.warning(f"Failed to parse negotiation item {i}: {e}")
+                    logger.warning(f"Failed to advance to page {page_num + 1}: {e}")
+                    break
+                page_num += 1
 
         except Exception as e:
             logger.error(f"Failed to load negotiations page: {e}")
         finally:
             await page.close()
 
-        return negotiations
+        logger.info(f"Negotiations: {len(all_negotiations)} total parsed across {page_num} pages")
+        return all_negotiations
+
+    # data-qa class on each item's status tag → our internal Application.status
+    _NEGOTIATION_STATUS_MAP = {
+        "negotiations-item-not-viewed": "sent",
+        "negotiations-item-viewed": "viewed",
+        "negotiations-item-interview": "invited",
+        "negotiations-item-discard": "declined",
+    }
+
+    async def _parse_negotiations_dom(self, page, page_num: int) -> list[BrowserNegotiation]:
+        """Parse all negotiation cards visible in the current DOM."""
+        items = page.locator('[data-qa="negotiations-item"]')
+        count = await items.count()
+        result: list[BrowserNegotiation] = []
+
+        for i in range(count):
+            item = items.nth(i)
+            try:
+                title_el = item.locator('[data-qa="negotiations-item-vacancy"]')
+                vacancy_name = (
+                    (await title_el.inner_text()).strip()
+                    if await title_el.count() > 0 else ""
+                )
+
+                vacancy_url = ""
+                link = item.locator('a[href*="/vacancy/"]').first
+                if await link.count() > 0:
+                    vacancy_url = (await link.get_attribute("href")) or ""
+
+                employer_el = item.locator('[data-qa="negotiations-item-company"]')
+                employer_name = (
+                    (await employer_el.inner_text()).strip()
+                    if await employer_el.count() > 0 else ""
+                )
+
+                state = "unknown"
+                for tag_class, internal in self._NEGOTIATION_STATUS_MAP.items():
+                    if await item.locator(f'[data-qa~="{tag_class}"]').count() > 0:
+                        state = internal
+                        break
+
+                vacancy_id = ""
+                if vacancy_url:
+                    parts = vacancy_url.rstrip("/").split("/")
+                    for j, part in enumerate(parts):
+                        if part == "vacancy" and j + 1 < len(parts):
+                            vacancy_id = parts[j + 1].split("?")[0]
+                            break
+
+                result.append(BrowserNegotiation(
+                    vacancy_id=vacancy_id,
+                    state=state,
+                    vacancy_name=vacancy_name,
+                    employer_name=employer_name,
+                    vacancy_url=vacancy_url,
+                ))
+            except Exception as e:
+                logger.warning(f"Failed to parse negotiation item {i} on page {page_num}: {e}")
+
+        return result
 
     async def touch_all_resumes(self) -> tuple[int, int, list[str]]:
         """Touch all resumes from the resumes list page.

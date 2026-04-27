@@ -359,17 +359,9 @@ class Pipeline:
                 continue
 
             neg = neg_map.get(vacancy.hh_id)
-            if neg:
-                # Map Russian status text to our states
-                state_map = {
-                    "отклик": "sent",
-                    "приглашение": "invited",
-                    "отказ": "declined",
-                    "предложение": "offer",
-                    "просмотрен": "viewed",
-                }
-                new_status = state_map.get(neg.state, None)
-                if new_status and new_status != app.status:
+            if neg and neg.state in ("sent", "viewed", "invited", "declined", "offer"):
+                new_status = neg.state
+                if new_status != app.status:
                     old_status = app.status
                     app.status = new_status
                     app.hh_status = neg.state
