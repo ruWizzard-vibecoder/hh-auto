@@ -43,6 +43,12 @@ class Settings(BaseSettings):
     # and can have letters generated manually via UI button
     auto_generate_score: float = 0.7
 
+    # When user approves a cover letter, enqueue the source vacancy for similar-vacancies expansion
+    expansion_on_approve: bool = True
+    expansion_on_approve_per_seed: int = 20
+    expansion_worker_throttle_seconds: float = 5.0
+    expansion_seed_cooldown_hours: int = 24
+
     # Server
     host: str = "0.0.0.0"
     port: int = 8100

@@ -551,9 +551,75 @@ class Pipeline:
             f"{len(deduped)} unique, {len(new_vacancies)} new after filters"
         )
 
+        scored_count, letters_count = await self._process_new_vacancies(new_vacancies)
+
+        await self._log_event("similar_expansion_complete", {
+            "seeds": len(seeds),
+            "fetched": len(all_similar),
+            "new": len(new_vacancies),
+            "scored": scored_count,
+            "letters": letters_count,
+        })
+        await self.db.commit()
+        logger.info(
+            f"Similar expansion complete: {len(seeds)} seeds → "
+            f"{len(new_vacancies)} new, {scored_count} scored, "
+            f"{letters_count} letters"
+        )
+
+    async def expand_from_seed(self, seed_hh_id: str, per_seed: int = 20) -> dict:
+        """Fetch similar vacancies for one seed and process new ones through the pipeline.
+
+        Used by the seed-expansion worker to react to user-approved letters.
+        """
+        logger.info(f"Seed expansion: {seed_hh_id} (per_seed={per_seed})")
+
+        try:
+            similar = await self.hh.get_similar_vacancies(seed_hh_id, per_page=per_seed)
+        except HHApiError as e:
+            logger.warning(f"Seed expansion: hh.ru API error for {seed_hh_id}: {e}")
+            return {"fetched": 0, "new": 0, "scored": 0, "letters": 0}
+        except Exception as e:
+            logger.warning(f"Seed expansion: unexpected error for {seed_hh_id}: {e}")
+            return {"fetched": 0, "new": 0, "scored": 0, "letters": 0}
+
+        if not similar:
+            return {"fetched": 0, "new": 0, "scored": 0, "letters": 0}
+
+        new_vacancies = await self._filter_known(similar)
+        new_vacancies = await self._apply_company_rules(new_vacancies)
+
+        scored_count, letters_count = await self._process_new_vacancies(new_vacancies)
+
+        await self._log_event("seed_expansion_complete", {
+            "seed_hh_id": seed_hh_id,
+            "fetched": len(similar),
+            "new": len(new_vacancies),
+            "scored": scored_count,
+            "letters": letters_count,
+        })
+        await self.db.commit()
+        logger.info(
+            f"Seed expansion complete: {seed_hh_id} → "
+            f"{len(similar)} fetched, {len(new_vacancies)} new, "
+            f"{scored_count} scored, {letters_count} letters"
+        )
+        return {
+            "fetched": len(similar),
+            "new": len(new_vacancies),
+            "scored": scored_count,
+            "letters": letters_count,
+        }
+
+    async def _process_new_vacancies(
+        self, new_vacancies: list[VacancyShort]
+    ) -> tuple[int, int]:
+        """Score, save, and generate cover letters for a batch of new vacancies.
+
+        Returns (scored_count, letters_count). Caller is responsible for commit.
+        """
         scored_count = 0
         letters_count = 0
-        # Use a synthetic profile_id = NULL — we'll use first active profile as fallback
         profiles = await self._get_active_profiles()
         fallback_profile_id = profiles[0].id if profiles else None
 
@@ -636,19 +702,7 @@ class Pipeline:
                 except Exception as e:
                     logger.error(f"Cover letter gen failed for {v.hh_id}: {e}")
 
-        await self._log_event("similar_expansion_complete", {
-            "seeds": len(seeds),
-            "fetched": len(all_similar),
-            "new": len(new_vacancies),
-            "scored": scored_count,
-            "letters": letters_count,
-        })
-        await self.db.commit()
-        logger.info(
-            f"Similar expansion complete: {len(seeds)} seeds → "
-            f"{len(new_vacancies)} new, {scored_count} scored, "
-            f"{letters_count} letters"
-        )
+        return scored_count, letters_count
 
     # --- Resume Rotation ---
 

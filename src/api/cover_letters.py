@@ -11,6 +11,7 @@ from sqlalchemy.orm import selectinload
 from src.database import get_db
 from src.models.cover_letter import CoverLetter
 from src.models.vacancy import Vacancy
+from src.services import seed_expansion_queue
 
 router = APIRouter(prefix="/api/cover-letters")
 
@@ -62,6 +63,9 @@ async def approve(letter_id: int, db: AsyncSession = Depends(get_db)):
     letter.reviewed_at = datetime.utcnow()
     await db.commit()
 
+    if letter.vacancy and letter.vacancy.hh_id:
+        seed_expansion_queue.enqueue(letter.vacancy.hh_id)
+
     return HTMLResponse(_render_letter_card(letter))
 
 
@@ -84,6 +88,9 @@ async def edit_and_approve(
     letter.status = "approved"
     letter.reviewed_at = datetime.utcnow()
     await db.commit()
+
+    if letter.vacancy and letter.vacancy.hh_id:
+        seed_expansion_queue.enqueue(letter.vacancy.hh_id)
 
     return HTMLResponse(_render_letter_card(letter))
 
@@ -138,6 +145,7 @@ async def bulk_approve(
     result = await db.execute(
         select(CoverLetter)
         .join(CoverLetter.vacancy)
+        .options(selectinload(CoverLetter.vacancy))
         .where(
             CoverLetter.status == "pending",
             Vacancy.relevance_score >= threshold_norm,
@@ -145,10 +153,17 @@ async def bulk_approve(
     )
     letters = list(result.scalars().all())
     now = datetime.utcnow()
+    seed_hh_ids: list[str] = []
     for letter in letters:
         letter.status = "approved"
         letter.reviewed_at = now
+        if letter.vacancy and letter.vacancy.hh_id:
+            seed_hh_ids.append(letter.vacancy.hh_id)
     await db.commit()
+
+    for hh_id in seed_hh_ids:
+        seed_expansion_queue.enqueue(hh_id)
+
     return JSONResponse({"updated": len(letters)})
 
 

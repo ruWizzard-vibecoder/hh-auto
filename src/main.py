@@ -59,11 +59,19 @@ async def lifespan(app: FastAPI):
         asyncio.create_task(notifier.start_polling())
         logger.info("Telegram bot polling started")
 
+    # Start seed expansion worker (drains hh_ids enqueued from letter approvals)
+    from src.services import seed_expansion_queue
+    seed_expansion_queue.start_worker()
+    logger.info("Seed expansion worker started")
+
     yield
 
     # Shutdown
     scheduler.shutdown(wait=False)
     logger.info("Scheduler stopped")
+
+    await seed_expansion_queue.stop_worker()
+    logger.info("Seed expansion worker stopped")
 
     from src.services.telegram_bot import notifier
     await notifier.close()
