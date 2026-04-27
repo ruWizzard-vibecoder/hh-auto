@@ -12,7 +12,8 @@ data/*.html
 data/rescore.log
 data/rescore.py
 
-# Resume snapshots (session-specific)
+# Resume snapshots (session-specific — overwritten each session)
+RESUME.md
 RESUME.md.prev
 
 # Backup files
