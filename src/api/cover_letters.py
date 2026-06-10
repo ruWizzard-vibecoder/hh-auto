@@ -17,7 +17,11 @@ router = APIRouter(prefix="/api/cover-letters")
 
 
 def _render_letter_card(letter: CoverLetter) -> str:
-    """Render a single cover letter card as HTML (for HTMX swap)."""
+    """Render a single cover letter card as HTML (for HTMX swap).
+
+    Markup mirrors the `render_letter` macro in templates/cover_letters.html
+    (editorial-broadsheet "wire dispatch" card). When changing one, sync the other.
+    """
     v = letter.vacancy
     score_class = (
         "score-high" if v.relevance_score and v.relevance_score >= 0.7
@@ -28,23 +32,26 @@ def _render_letter_card(letter: CoverLetter) -> str:
     badge_class = f"badge-{letter.status}"
 
     text = letter.edited_text or letter.generated_text
+    co_part = f'<span class="letter-head-co">@ {v.company_name}</span>' if v.company_name else ''
 
     return f"""
-    <div class="cover-letter-card" id="letter-{letter.id}">
+    <article class="cover-letter-card" id="letter-{letter.id}">
         <header>
             <div>
-                <strong>{v.title}</strong>
-                {f' @ {v.company_name}' if v.company_name else ''}
-                <br>
-                <small>
-                    Score: <span class="{score_class}">{score_pct}</span>
-                    | <a href="{v.url}" target="_blank">hh.ru</a>
-                </small>
+                <span class="letter-head-title">
+                    <a href="{v.url}" target="_blank">{v.title}</a>
+                    {co_part}
+                </span>
+                <div class="letter-meta">
+                    <span>оценка <span class="{score_class}">{score_pct}</span></span>
+                    <span class="sep">│</span>
+                    <a href="{v.url}" target="_blank">hh.ru ↗</a>
+                </div>
             </div>
             <span class="badge {badge_class}">{letter.status}</span>
         </header>
         <div class="cover-letter-text">{text}</div>
-    </div>
+    </article>
     """
 
 

@@ -215,7 +215,13 @@ async def recent_events(db: AsyncSession = Depends(get_db)):
     events = list(result.scalars().all())
 
     if not events:
-        return "<p>Событий пока нет. Запустите поиск.</p>"
+        return (
+            '<p class="text-muted" '
+            'style="font-family: var(--mono); letter-spacing: .1em; '
+            'text-transform: uppercase; font-size: 11px; padding: 16px 0;">'
+            '···  событий пока нет — запустите поиск  ···'
+            '</p>'
+        )
 
     items = ""
     for e in events:
@@ -223,15 +229,16 @@ async def recent_events(db: AsyncSession = Depends(get_db)):
         details = ""
         if e.details:
             if isinstance(e.details, dict):
-                details = ", ".join(f"{k}: {v}" for k, v in list(e.details.items())[:3])
-        error_str = f' <small class="text-danger">{e.error_message[:50]}</small>' if e.error_message else ""
+                details = " · ".join(f"{k} {v}" for k, v in list(e.details.items())[:3])
+        error_str = f' <small class="text-danger">{e.error_message[:60]}</small>' if e.error_message else ""
+        details_str = f' — <span class="text-muted">{details}</span>' if details else ""
         items += (
             f'<div class="timeline-item">'
             f'<div class="timeline-dot"></div>'
             f'<div class="timeline-content">'
-            f'<span class="timeline-time">{time_str}</span> '
+            f'<span class="timeline-time">{time_str}</span>'
             f'<strong>{e.event_type}</strong>'
-            f'{f" — {details}" if details else ""}{error_str}'
+            f'{details_str}{error_str}'
             f'</div></div>'
         )
 
@@ -267,7 +274,10 @@ async def generate_letter_for_vacancy(vacancy_id: int, db: AsyncSession = Depend
     if not vacancy:
         return JSONResponse({"error": "not found"}, status_code=404)
 
-    from src.services.cover_letter_generator import generate_cover_letter
+    from src.services.cover_letter_generator import (
+        CoverLetterRejectedError,
+        generate_cover_letter,
+    )
     from src.services.vacancy_scorer import ScoringResult
     from src.services.pipeline import _load_resume_text
 
@@ -316,6 +326,15 @@ async def generate_letter_for_vacancy(vacancy_id: int, db: AsyncSession = Depend
         await db.commit()
 
         return JSONResponse({"status": "generated", "letter_id": letter.id})
+    except CoverLetterRejectedError as e:
+        return JSONResponse(
+            {
+                "error": "rejected_by_safety_check",
+                "detail": str(e),
+                "hint": "Описание вакансии похоже на prompt injection. Письмо не сохранено.",
+            },
+            status_code=422,
+        )
     except Exception as e:
         return JSONResponse({"error": str(e)[:200]}, status_code=500)
 

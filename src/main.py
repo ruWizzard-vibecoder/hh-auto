@@ -98,6 +98,10 @@ from src.api.cover_letters import router as cover_letters_router
 from src.api.settings_api import router as settings_api_router
 from src.api.pipeline_api import router as pipeline_api_router
 from src.api.resumes_api import router as resumes_api_router
+from src.api.dashboard_json import router as dashboard_json_router
+from src.api.letters_json import router as letters_json_router
+from src.api.vacancies_json import router as vacancies_json_router
+from src.api.extra_json import router as extra_json_router
 
 app.include_router(dashboard_router)
 app.include_router(auth_router)
@@ -105,6 +109,10 @@ app.include_router(cover_letters_router)
 app.include_router(settings_api_router)
 app.include_router(pipeline_api_router)
 app.include_router(resumes_api_router)
+app.include_router(dashboard_json_router)
+app.include_router(letters_json_router)
+app.include_router(vacancies_json_router)
+app.include_router(extra_json_router)
 
 
 @app.get("/health")
