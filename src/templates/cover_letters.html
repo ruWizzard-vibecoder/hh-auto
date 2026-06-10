@@ -2,11 +2,18 @@
 {% block title %}Письма — hh-auto{% endblock %}
 {% block content %}
 {% set sq = '&q=' ~ current_search if current_search else '' %}
-<h1>Сопроводительные письма</h1>
+
+<header class="page-mast">
+    <h1>Письма<span class="count">№02</span></h1>
+    <div class="mast-stamp">
+        <strong>РЕДАКЦИОННАЯ ПРОВЕРКА</strong><br>
+        <span class="vmrl">●</span> на столе: {{ counts.pending }} · одобрено: {{ counts.approved }}
+    </div>
+</header>
 
 <form action="/cover-letters" method="get" class="search-form">
     <input type="search" name="q" value="{{ current_search }}"
-           placeholder="Поиск по названию или компании..." class="search-input">
+           placeholder="поиск по названию или компании…" class="search-input">
     {% if current_status %}<input type="hidden" name="status" value="{{ current_status }}">{% endif %}
     {% if current_employment %}<input type="hidden" name="employment" value="{{ current_employment }}">{% endif %}
     {% if current_sort != 'date' %}<input type="hidden" name="sort" value="{{ current_sort }}">{% endif %}
@@ -15,19 +22,19 @@
 
 <div class="filter-bar">
     <a href="/cover-letters?status=pending{% if current_employment %}&employment={{ current_employment }}{% endif %}{% if current_sort != 'date' %}&sort={{ current_sort }}{% endif %}{{ sq }}" class="filter-pill {% if current_status == 'pending' %}active{% endif %}">
-        Ожидают ({{ counts.pending }})
+        Ожидают <span class="num">·{{ counts.pending }}</span>
     </a>
     <a href="/cover-letters?status=approved{% if current_employment %}&employment={{ current_employment }}{% endif %}{% if current_sort != 'date' %}&sort={{ current_sort }}{% endif %}{{ sq }}" class="filter-pill {% if current_status == 'approved' %}active{% endif %}">
-        Одобрены ({{ counts.approved }})
+        Одобрены <span class="num">·{{ counts.approved }}</span>
     </a>
     <a href="/cover-letters?status=no_letter{% if current_employment %}&employment={{ current_employment }}{% endif %}{% if current_sort != 'date' %}&sort={{ current_sort }}{% endif %}{{ sq }}" class="filter-pill {% if current_status == 'no_letter' %}active{% endif %}">
-        Без письма ({{ counts.no_letter }})
+        Без письма <span class="num">·{{ counts.no_letter }}</span>
     </a>
     <a href="/cover-letters?status=sent{% if current_employment %}&employment={{ current_employment }}{% endif %}{% if current_sort != 'date' %}&sort={{ current_sort }}{% endif %}{{ sq }}" class="filter-pill {% if current_status == 'sent' %}active{% endif %}">
-        Отправлены ({{ counts.sent }})
+        Отправлены <span class="num">·{{ counts.sent }}</span>
     </a>
     <a href="/cover-letters?status=rejected{% if current_employment %}&employment={{ current_employment }}{% endif %}{% if current_sort != 'date' %}&sort={{ current_sort }}{% endif %}{{ sq }}" class="filter-pill {% if current_status == 'rejected' %}active{% endif %}">
-        Отклонены ({{ counts.rejected }})
+        Отклонены <span class="num">·{{ counts.rejected }}</span>
     </a>
     <a href="/cover-letters{% if current_employment %}?employment={{ current_employment }}{% if current_sort != 'date' %}&sort={{ current_sort }}{% endif %}{{ sq }}{% elif current_sort != 'date' %}?sort={{ current_sort }}{{ sq }}{% elif current_search %}?q={{ current_search }}{% endif %}" class="filter-pill {% if not current_status %}active{% endif %}">
         Все
@@ -36,48 +43,40 @@
 
 {% if employment_counts %}
 <div class="filter-bar">
-    <span class="filter-label">Занятость:</span>
+    <span class="filter-label">Занятость</span>
     {% if employment_counts.get('part') %}
     <a href="/cover-letters?employment=part{% if current_status %}&status={{ current_status }}{% endif %}{% if current_sort != 'date' %}&sort={{ current_sort }}{% endif %}{{ sq }}" class="filter-pill filter-pill--sm {% if current_employment == 'part' %}active{% endif %}">
-        Частичная ({{ employment_counts.part }})
+        Частичная <span class="num">·{{ employment_counts.part }}</span>
     </a>
     {% endif %}
     {% if employment_counts.get('project') %}
     <a href="/cover-letters?employment=project{% if current_status %}&status={{ current_status }}{% endif %}{% if current_sort != 'date' %}&sort={{ current_sort }}{% endif %}{{ sq }}" class="filter-pill filter-pill--sm {% if current_employment == 'project' %}active{% endif %}">
-        Проектная ({{ employment_counts.project }})
+        Проектная <span class="num">·{{ employment_counts.project }}</span>
     </a>
     {% endif %}
     {% if employment_counts.get('full') %}
     <a href="/cover-letters?employment=full{% if current_status %}&status={{ current_status }}{% endif %}{% if current_sort != 'date' %}&sort={{ current_sort }}{% endif %}{{ sq }}" class="filter-pill filter-pill--sm {% if current_employment == 'full' %}active{% endif %}">
-        Полная ({{ employment_counts.full }})
+        Полная <span class="num">·{{ employment_counts.full }}</span>
     </a>
     {% endif %}
     {% if current_employment %}
     <a href="/cover-letters{% if current_status %}?status={{ current_status }}{% if current_sort != 'date' %}&sort={{ current_sort }}{% endif %}{{ sq }}{% elif current_sort != 'date' %}?sort={{ current_sort }}{{ sq }}{% elif current_search %}?q={{ current_search }}{% endif %}" class="filter-pill filter-pill--sm filter-pill--reset">
-        Сбросить
+        ✕ сбросить
     </a>
     {% endif %}
 </div>
 {% endif %}
 
 <div class="filter-bar">
-    <span class="filter-label">Сортировка:</span>
-    <a href="/cover-letters?sort=score{% if current_status %}&status={{ current_status }}{% endif %}{% if current_employment %}&employment={{ current_employment }}{% endif %}{{ sq }}" class="filter-pill filter-pill--sm {% if current_sort == 'score' %}active{% endif %}">
-        По оценке
-    </a>
-    <a href="/cover-letters?sort=date{% if current_status %}&status={{ current_status }}{% endif %}{% if current_employment %}&employment={{ current_employment }}{% endif %}{{ sq }}" class="filter-pill filter-pill--sm {% if current_sort != 'score' %}active{% endif %}">
-        По дате
-    </a>
+    <span class="filter-label">Сортировка</span>
+    <a href="/cover-letters?sort=score{% if current_status %}&status={{ current_status }}{% endif %}{% if current_employment %}&employment={{ current_employment }}{% endif %}{{ sq }}" class="filter-pill filter-pill--sm {% if current_sort == 'score' %}active{% endif %}">по оценке</a>
+    <a href="/cover-letters?sort=date{% if current_status %}&status={{ current_status }}{% endif %}{% if current_employment %}&employment={{ current_employment }}{% endif %}{{ sq }}" class="filter-pill filter-pill--sm {% if current_sort != 'score' %}active{% endif %}">по дате</a>
 
-    <span class="filter-label" style="margin-left: 1rem;">Группировка:</span>
+    <span class="filter-label" style="margin-left: 20px;">Группировка</span>
     {% if current_group == 'company' %}
-    <a href="/cover-letters?{% if current_status %}status={{ current_status }}&{% endif %}{% if current_employment %}employment={{ current_employment }}&{% endif %}sort={{ current_sort or 'date' }}{{ sq }}" class="filter-pill filter-pill--sm active">
-        По компаниям
-    </a>
+    <a href="/cover-letters?{% if current_status %}status={{ current_status }}&{% endif %}{% if current_employment %}employment={{ current_employment }}&{% endif %}sort={{ current_sort or 'date' }}{{ sq }}" class="filter-pill filter-pill--sm active">по компаниям</a>
     {% else %}
-    <a href="/cover-letters?group=company{% if current_status %}&status={{ current_status }}{% endif %}{% if current_employment %}&employment={{ current_employment }}{% endif %}{% if current_sort != 'date' %}&sort={{ current_sort }}{% endif %}{{ sq }}" class="filter-pill filter-pill--sm">
-        По компаниям
-    </a>
+    <a href="/cover-letters?group=company{% if current_status %}&status={{ current_status }}{% endif %}{% if current_employment %}&employment={{ current_employment }}{% endif %}{% if current_sort != 'date' %}&sort={{ current_sort }}{% endif %}{{ sq }}" class="filter-pill filter-pill--sm">по компаниям</a>
     {% endif %}
 </div>
 
@@ -88,7 +87,7 @@
           hx-on::after-request="if(event.detail.successful) location.reload(); else showToast('Ошибка массового одобрения');"
           hx-confirm="Одобрить все письма с оценкой >= указанного порога?"
           class="form-inline">
-        <label class="filter-label">Одобрить все >=</label>
+        <label class="filter-label">Одобрить ≥</label>
         <input type="number" name="threshold" value="70" min="0" max="100" step="5" class="input-sm">
         <button type="submit" class="btn-sm primary">%</button>
     </form>
@@ -104,7 +103,7 @@
           hx-on::after-request="location.reload()"
           hx-confirm="Отклонить все письма с оценкой ниже указанного порога?"
           class="form-inline">
-        <label class="filter-label">Отклонить все &lt;</label>
+        <label class="filter-label">Отклонить &lt;</label>
         <input type="number" name="threshold" value="40" min="0" max="100" step="5" class="input-sm">
         <button type="submit" class="btn-sm outline contrast">%</button>
     </form>
@@ -112,35 +111,37 @@
 {% endif %}
 
 {% macro render_letter(letter) %}
-<div class="cover-letter-card" id="letter-{{ letter.id }}">
+<article class="cover-letter-card" id="letter-{{ letter.id }}">
     <header>
         <div>
-            <strong>{{ letter.vacancy.title }}</strong>
-            {% if letter.vacancy.company_name %} @ {{ letter.vacancy.company_name }}{% endif %}
-            {% if letter.vacancy.employment == 'part' %}<span class="badge badge-parttime">Частичная</span>{% endif %}
-            {% if letter.vacancy.employment == 'project' %}<span class="badge badge-project">Проект</span>{% endif %}
-            <br>
-            <small>
-                Оценка: <span class="{% if letter.vacancy.relevance_score >= 0.7 %}score-high{% elif letter.vacancy.relevance_score >= 0.5 %}score-medium{% else %}score-low{% endif %}">
-                    {{ "%.0f"|format(letter.vacancy.relevance_score * 100) }}%
-                </span>
+            <span class="letter-head-title">
+                <a href="{{ letter.vacancy.url }}" target="_blank">{{ letter.vacancy.title }}</a>
+                {% if letter.vacancy.company_name %}<span class="letter-head-co">@ {{ letter.vacancy.company_name }}</span>{% endif %}
+            </span>
+            <div class="letter-meta">
+                <span>оценка <span class="{% if letter.vacancy.relevance_score >= 0.7 %}score-high{% elif letter.vacancy.relevance_score >= 0.5 %}score-medium{% else %}score-low{% endif %}">{{ "%.0f"|format(letter.vacancy.relevance_score * 100) }}%</span></span>
                 {% if letter.resume_id and resume_names.get(letter.resume_id) %}
-                | Резюме: <span class="badge badge-resume">{{ resume_names[letter.resume_id] }}</span>
+                <span class="sep">│</span>
+                <span>резюме <span class="badge badge-resume">{{ resume_names[letter.resume_id] }}</span></span>
                 {% endif %}
                 {% if letter.vacancy.salary_from or letter.vacancy.salary_to %}
-                | ЗП: {{ letter.vacancy.salary_from or '?' }}–{{ letter.vacancy.salary_to or '?' }} {{ letter.vacancy.salary_currency or '' }}
+                <span class="sep">│</span>
+                <span>зп {{ letter.vacancy.salary_from or '?' }}–{{ letter.vacancy.salary_to or '?' }} {{ letter.vacancy.salary_currency or '' }}</span>
                 {% endif %}
-                | <a href="{{ letter.vacancy.url }}" target="_blank">hh.ru</a>
-            </small>
+                {% if letter.vacancy.employment == 'part' %}<span class="sep">│</span><span class="badge badge-parttime">Частичная</span>{% endif %}
+                {% if letter.vacancy.employment == 'project' %}<span class="sep">│</span><span class="badge badge-project">Проект</span>{% endif %}
+                <span class="sep">│</span>
+                <a href="{{ letter.vacancy.url }}" target="_blank">hh.ru ↗</a>
+            </div>
             {% if letter.vacancy.matched_skills %}
-            <div class="skills-matched">{{ letter.vacancy.matched_skills | join(', ') }}</div>
+            <div class="skills-matched">{{ letter.vacancy.matched_skills | join(' · ') }}</div>
             {% endif %}
             {% if letter.vacancy.missing_skills %}
-            <div class="skills-missing">{{ letter.vacancy.missing_skills | join(', ') }}</div>
+            <div class="skills-missing">{{ letter.vacancy.missing_skills | join(' · ') }}</div>
             {% endif %}
             {% if letter.vacancy.description %}
             <details class="vacancy-details">
-                <summary>Показать описание вакансии</summary>
+                <summary>описание вакансии</summary>
                 <div class="vacancy-description">{{ letter.vacancy.description | safe }}</div>
             </details>
             {% endif %}
@@ -157,11 +158,11 @@
                 hx-swap="outerHTML"
                 hx-disabled-elt="this"
                 class="primary">
-            Одобрить
+            ✓ Одобрить
         </button>
         <button onclick="document.getElementById('edit-{{ letter.id }}').style.display='block'; this.style.display='none';"
                 class="secondary">
-            Редактировать
+            ✎ Редактировать
         </button>
         <button hx-post="/api/cover-letters/{{ letter.id }}/no-letter"
                 hx-target="#letter-{{ letter.id }}"
@@ -176,7 +177,7 @@
                 hx-disabled-elt="this"
                 hx-confirm="Отклонить это письмо?"
                 class="outline contrast">
-            Отклонить
+            ✕ Отклонить
         </button>
     </div>
 
@@ -185,7 +186,7 @@
               hx-target="#letter-{{ letter.id }}"
               hx-swap="outerHTML"
               hx-disabled-elt="find button[type=submit]">
-            <textarea name="edited_text" rows="8">{{ letter.generated_text }}</textarea>
+            <textarea name="edited_text" rows="10">{{ letter.generated_text }}</textarea>
             <div class="actions">
                 <button type="submit" class="primary">Сохранить и одобрить</button>
                 <button type="button" onclick="this.closest('[id^=edit-]').style.display='none'" class="outline">Отмена</button>
@@ -193,14 +194,14 @@
         </form>
     </div>
     {% endif %}
-</div>
+</article>
 {% endmacro %}
 
 {% if letters %}
 <div id="letters-list">
     {% if grouped %}
         {% for company, company_letters in grouped.items() %}
-        <h4 class="group-header">{{ company }} ({{ company_letters|length }})</h4>
+        <h4 class="group-header">{{ company }} · {{ company_letters|length }}</h4>
         {% for letter in company_letters %}
             {{ render_letter(letter) }}
         {% endfor %}
@@ -212,6 +213,6 @@
     {% endif %}
 </div>
 {% else %}
-<p>Нет писем по выбранному фильтру.</p>
+<p class="text-muted" style="font-family: var(--mono); letter-spacing: .1em; text-transform: uppercase; font-size: 11px; padding: 24px 0;">···  по выбранному фильтру писем нет  ···</p>
 {% endif %}
 {% endblock %}

@@ -1,38 +1,51 @@
 {% extends "base.html" %}
 {% block title %}Аналитика — hh-auto{% endblock %}
 {% block content %}
-<h1>Аналитика</h1>
 
-<div class="stats-grid">
-    <div class="stat-card stat-card--blue">
-        <h2>{{ stats.total_vacancies }}</h2>
-        <p>Всего вакансий</p>
+<header class="page-mast">
+    <h1>Аналитика<span class="count">№06</span></h1>
+    <div class="mast-stamp">
+        <strong>ЦИФРЫ · ТЕНДЕНЦИИ</strong><br>
+        <span class="vmrl">●</span> вып. <span data-edition-num>—</span> · <span data-edition-date>—</span>
     </div>
-    <div class="stat-card stat-card--green">
-        <h2>{{ stats.applications_sent }}</h2>
-        <p>Откликов отправлено</p>
+</header>
+
+<section class="figures">
+    <div class="figure" data-num="01">
+        <span class="figure-num num">{{ stats.total_vacancies }}</span>
+        <span class="figure-label">Всего вакансий</span>
     </div>
-    <div class="stat-card stat-card--teal">
-        <h2>{{ "%.0f"|format(stats.response_rate) }}%</h2>
-        <p>Процент ответов</p>
+    <div class="figure" data-num="02">
+        <span class="figure-num num is-indigo">{{ stats.applications_sent }}</span>
+        <span class="figure-label">Откликов отправлено</span>
     </div>
-    <div class="stat-card stat-card--purple">
-        <h2>{{ "%.0f"|format(stats.avg_score * 100) }}%</h2>
-        <p>Средняя оценка</p>
+    <div class="figure" data-num="03">
+        <span class="figure-num num is-sage">{{ "%.0f"|format(stats.response_rate) }}%</span>
+        <span class="figure-label">Процент ответов</span>
     </div>
-    <div class="stat-card stat-card--peach">
-        <h2>{{ stats.invited }}</h2>
-        <p>Приглашений</p>
+    <div class="figure" data-num="04">
+        <span class="figure-num num is-gold">{{ "%.0f"|format(stats.avg_score * 100) }}%</span>
+        <span class="figure-label">Средняя оценка</span>
     </div>
-    <div class="stat-card stat-card--yellow">
-        <h2>{{ stats.letters_approved }}</h2>
-        <p>Писем одобрено</p>
+    <div class="figure" data-num="05">
+        <span class="figure-num num is-hot">{{ stats.invited }}</span>
+        <span class="figure-label">Приглашений</span>
     </div>
-</div>
+    <div class="figure" data-num="06">
+        <span class="figure-num num">{{ stats.letters_approved }}</span>
+        <span class="figure-label">Писем одобрено</span>
+    </div>
+</section>
 
 <article>
     <header><strong>Отклики по дням</strong></header>
     {% if daily_stats %}
+    <div class="bar-legend">
+        <span class="bar-legend-item"><span class="bar-legend-swatch" style="background: var(--indigo);"></span>отправлено</span>
+        <span class="bar-legend-item"><span class="bar-legend-swatch" style="background: var(--gold);"></span>просмотрено</span>
+        <span class="bar-legend-item"><span class="bar-legend-swatch" style="background: var(--sage);"></span>приглашения</span>
+        <span class="bar-legend-item"><span class="bar-legend-swatch" style="background: var(--brick);"></span>отказы</span>
+    </div>
     <div class="bar-chart">
         {% for day in daily_stats %}
         {% set day_max = [day.sent, day.viewed, day.invited, day.declined] | max %}
@@ -48,8 +61,8 @@
         </div>
         {% endfor %}
     </div>
-    <details>
-        <summary>Таблица</summary>
+    <details style="margin-top: 32px;">
+        <summary>таблица</summary>
         <div class="table-wrapper">
         <table class="table-compact">
             <thead>
@@ -58,11 +71,11 @@
             <tbody>
                 {% for day in daily_stats %}
                 <tr>
-                    <td>{{ day.date }}</td>
-                    <td>{{ day.sent }}</td>
-                    <td>{{ day.viewed }}</td>
-                    <td>{{ day.invited }}</td>
-                    <td>{{ day.declined }}</td>
+                    <td class="num">{{ day.date }}</td>
+                    <td class="num">{{ day.sent }}</td>
+                    <td class="num">{{ day.viewed }}</td>
+                    <td class="num">{{ day.invited }}</td>
+                    <td class="num">{{ day.declined }}</td>
                 </tr>
                 {% endfor %}
             </tbody>
@@ -70,7 +83,7 @@
         </div>
     </details>
     {% else %}
-    <p>Нет данных за последние 14 дней.</p>
+    <p class="text-muted">Нет данных за последние 14 дней.</p>
     {% endif %}
 </article>
 
@@ -78,7 +91,7 @@
     <header><strong>Топ компаний по откликам</strong></header>
     {% if top_companies %}
     <div class="table-wrapper">
-    <table class="table-compact table-hover">
+    <table class="table-compact">
         <thead>
             <tr><th>Компания</th><th>Откликов</th><th>Ответов</th></tr>
         </thead>
@@ -86,15 +99,15 @@
             {% for company in top_companies %}
             <tr>
                 <td>{{ company.name }}</td>
-                <td>{{ company.count }}</td>
-                <td>{{ company.responses }}</td>
+                <td class="num">{{ company.count }}</td>
+                <td class="num">{{ company.responses }}</td>
             </tr>
             {% endfor %}
         </tbody>
     </table>
     </div>
     {% else %}
-    <p>Нет данных по компаниям.</p>
+    <p class="text-muted">Нет данных по компаниям.</p>
     {% endif %}
 </article>
 

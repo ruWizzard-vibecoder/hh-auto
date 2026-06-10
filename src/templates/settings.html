@@ -1,26 +1,37 @@
 {% extends "base.html" %}
 {% block title %}Настройки — hh-auto{% endblock %}
 {% block content %}
-<h1>Настройки</h1>
+
+<header class="page-mast">
+    <h1>Настройки<span class="count">№07</span></h1>
+    <div class="mast-stamp">
+        <strong>МАШИННОЕ ОТДЕЛЕНИЕ</strong><br>
+        <span class="vmrl">●</span> доступ ограничен · вып. <span data-edition-num>—</span>
+    </div>
+</header>
 
 <!-- Auth Status -->
 <article>
     <header><strong>Авторизация hh.ru</strong></header>
     {% if is_authenticated %}
-        <p>Статус: <span class="badge badge-approved">Подключено</span></p>
+        <p>Статус: <span class="badge badge-approved">подключено</span></p>
         <details>
             <summary>Повторный вход</summary>
             <form method="post" action="/auth/login">
-                <label>Email <input type="email" name="email" required></label>
-                <label>Пароль <input type="password" name="password" required></label>
+                <div class="grid">
+                    <label>Email <input type="email" name="email" required></label>
+                    <label>Пароль <input type="password" name="password" required></label>
+                </div>
                 <button type="submit" class="outline">Войти заново</button>
             </form>
         </details>
     {% else %}
-        <p>Статус: <span class="badge badge-declined">Не подключено</span></p>
+        <p>Статус: <span class="badge badge-declined">не подключено</span></p>
         <form method="post" action="/auth/login">
-            <label>Email <input type="email" name="email" required placeholder="your@email.com"></label>
-            <label>Пароль <input type="password" name="password" required></label>
+            <div class="grid">
+                <label>Email <input type="email" name="email" required placeholder="your@email.com"></label>
+                <label>Пароль <input type="password" name="password" required></label>
+            </div>
             <button type="submit" class="primary">Войти на hh.ru</button>
         </form>
     {% endif %}
@@ -49,8 +60,8 @@
                     <select name="experience">
                         <option value="">Любой</option>
                         <option value="noExperience" {% if profile.experience == 'noExperience' %}selected{% endif %}>Без опыта</option>
-                        <option value="between1And3" {% if profile.experience == 'between1And3' %}selected{% endif %}>1-3 года</option>
-                        <option value="between3And6" {% if profile.experience == 'between3And6' %}selected{% endif %}>3-6 лет</option>
+                        <option value="between1And3" {% if profile.experience == 'between1And3' %}selected{% endif %}>1–3 года</option>
+                        <option value="between3And6" {% if profile.experience == 'between3And6' %}selected{% endif %}>3–6 лет</option>
                         <option value="moreThan6" {% if profile.experience == 'moreThan6' %}selected{% endif %}>6+ лет</option>
                     </select>
                 </label>
@@ -79,7 +90,7 @@
                     <input type="checkbox" name="only_with_salary" {% if profile.only_with_salary %}checked{% endif %}> Только с ЗП
                 </label>
             </div>
-            <label>
+            <label class="checkbox-inline">
                 <input type="checkbox" name="is_active" {% if profile.is_active %}checked{% endif %}> Активен
             </label>
             <button type="submit" class="primary">Сохранить</button>
@@ -88,7 +99,7 @@
     {% endfor %}
 
     <details>
-        <summary>+ Добавить профиль</summary>
+        <summary>＋ Добавить профиль</summary>
         <form hx-post="/api/settings/profiles" hx-swap="none" hx-on::after-request="location.reload()">
             <label>Название <input type="text" name="name" required></label>
             <label>Поисковый запрос <input type="text" name="search_text" placeholder="AI инженер Python"></label>
@@ -102,8 +113,8 @@
                     <select name="experience">
                         <option value="">Любой</option>
                         <option value="noExperience">Без опыта</option>
-                        <option value="between1And3">1-3 года</option>
-                        <option value="between3And6">3-6 лет</option>
+                        <option value="between1And3">1–3 года</option>
+                        <option value="between3And6">3–6 лет</option>
                         <option value="moreThan6">6+ лет</option>
                     </select>
                 </label>
@@ -141,7 +152,7 @@
 <article>
     <header><strong>Правила компаний</strong></header>
     <div class="table-wrapper">
-    <table class="table-compact table-hover">
+    <table class="table-compact">
         <thead>
             <tr><th>Тип</th><th>Совпадение</th><th>Значение</th><th>Причина</th><th></th></tr>
         </thead>
@@ -149,14 +160,14 @@
             {% for rule in rules %}
             <tr>
                 <td><span class="badge badge-{{ 'declined' if rule.rule_type == 'blacklist' else 'approved' }}">{{ rule.rule_type }}</span></td>
-                <td>{{ rule.match_type }}</td>
+                <td><small class="text-muted">{{ rule.match_type }}</small></td>
                 <td>{{ rule.match_value }}</td>
-                <td>{{ rule.reason or '—' }}</td>
+                <td><small>{{ rule.reason or '—' }}</small></td>
                 <td>
                     <button hx-delete="/api/settings/rules/{{ rule.id }}" hx-swap="none"
                             hx-on::after-request="location.reload()"
                             class="btn-sm outline contrast">
-                        Удалить
+                        ✕
                     </button>
                 </td>
             </tr>
@@ -182,7 +193,7 @@
             <label>Значение <input type="text" name="match_value" required></label>
             <label>Причина <input type="text" name="reason"></label>
         </div>
-        <button type="submit" class="outline">Добавить правило</button>
+        <button type="submit" class="outline">＋ Добавить правило</button>
     </form>
 </article>
 
@@ -191,7 +202,7 @@
     <header><strong>Резюме</strong></header>
     {% if resumes %}
     <div class="table-wrapper">
-    <table class="table-compact table-hover">
+    <table class="table-compact">
         <thead>
             <tr>
                 <th>Название</th>
@@ -207,10 +218,10 @@
             <tr>
                 <td>{{ r.title }}</td>
                 <td><span class="badge badge-resume">{{ r.short_name }}</span></td>
-                <td><a href="https://hh.ru/resume/{{ r.hh_id }}" target="_blank" class="text-muted">{{ r.hh_id[:12] }}...</a></td>
-                <td>{% if r.is_primary %}Да{% else %}—{% endif %}</td>
+                <td><a href="https://hh.ru/resume/{{ r.hh_id }}" target="_blank" class="text-muted"><code>{{ r.hh_id[:12] }}…</code></a></td>
+                <td>{% if r.is_primary %}<span class="badge badge-invited">★</span>{% else %}—{% endif %}</td>
                 <td><span class="badge badge-{{ 'approved' if r.visibility_status == 'visible' else 'declined' if r.visibility_status == 'hidden' else 'pending' }}">{{ r.visibility_status }}</span></td>
-                <td>{{ r.last_rotated_at.strftime('%d.%m %H:%M') if r.last_rotated_at else '—' }}</td>
+                <td class="num">{{ r.last_rotated_at.strftime('%d.%m %H:%M') if r.last_rotated_at else '—' }}</td>
             </tr>
             {% endfor %}
         </tbody>
@@ -220,16 +231,16 @@
         <button hx-post="/api/resumes/seed" hx-swap="none"
                 hx-on::after-request="location.reload()"
                 class="btn-sm outline">
-            Обновить ключевые слова
+            ↻ Обновить ключевые слова
         </button>
         <button hx-post="/api/resumes/rotate" hx-swap="none"
                 hx-confirm="Запустить ротацию резюме? Текущее вторичное будет скрыто, следующее опубликовано."
                 class="btn-sm outline">
-            Ротация сейчас
+            ⇄ Ротация сейчас
         </button>
     </div>
     {% else %}
-    <p>Резюме не найдены.</p>
+    <p class="text-muted">Резюме не найдены.</p>
     <button hx-post="/api/resumes/seed" hx-swap="none"
             hx-on::after-request="location.reload()"
             class="primary">
@@ -240,34 +251,34 @@
 
 <!-- Scheduler Controls -->
 <article>
-    <header><strong>Управление</strong></header>
+    <header><strong>Управление пайплайном</strong></header>
     <div id="pipeline-status-msg"></div>
     <div class="control-grid">
         <button hx-post="/api/pipeline/search" hx-swap="none"
                 hx-on::after-request="showPipelineMsg(this, 'Поиск запущен')"
                 class="primary">
-            Запустить поиск
+            ▶ Запустить поиск
         </button>
         <button hx-post="/api/pipeline/apply" hx-swap="none"
                 hx-on::after-request="showPipelineMsg(this, 'Отклики отправляются')"
                 class="secondary">
-            Отправить отклики
+            ✉ Отправить отклики
         </button>
         <button hx-post="/api/pipeline/status-check" hx-swap="none"
                 hx-on::after-request="showPipelineMsg(this, 'Проверка статусов запущена')"
                 class="outline">
-            Проверить статусы
+            ↻ Проверить статусы
         </button>
         <button hx-post="/api/pipeline/archive-check" hx-swap="none"
                 hx-on::after-request="showPipelineMsg(this, 'Проверка архивности запущена')"
                 class="outline">
-            Проверить архивность
+            ⌀ Проверить архивность
         </button>
     </div>
     <script>
     function showPipelineMsg(btn, msg) {
         var el = document.getElementById('pipeline-status-msg');
-        el.innerHTML = '<p class="text-success"><strong>✓</strong> ' + msg + '</p>';
+        el.innerHTML = '<p class="text-success" style="font-family: var(--mono); font-size: 12px; letter-spacing: .08em; text-transform: uppercase; padding: 10px 14px; background: var(--sage-soft); border-left: 3px solid var(--sage); margin: 8px 0 14px;"><strong>✓</strong> ' + msg + '</p>';
         btn.setAttribute('aria-busy', 'false');
         setTimeout(function() { el.innerHTML = ''; }, 5000);
     }

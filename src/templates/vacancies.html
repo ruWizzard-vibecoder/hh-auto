@@ -2,11 +2,18 @@
 {% block title %}Вакансии — hh-auto{% endblock %}
 {% block content %}
 {% set sq = '&q=' ~ current_search if current_search else '' %}
-<h1>Вакансии ({{ total }})</h1>
+
+<header class="page-mast">
+    <h1>Вакансии<span class="count">№{{ total }}</span></h1>
+    <div class="mast-stamp">
+        <strong>РЕЕСТР ОБЪЯВЛЕНИЙ</strong><br>
+        <span class="vmrl">●</span> вып. <span data-edition-num>—</span> · <span data-edition-date>—</span>
+    </div>
+</header>
 
 <form action="/vacancies" method="get" class="search-form">
     <input type="search" name="q" value="{{ current_search }}"
-           placeholder="Поиск по названию или компании..." class="search-input">
+           placeholder="поиск по названию или компании…" class="search-input">
     {% if current_status %}<input type="hidden" name="status" value="{{ current_status }}">{% endif %}
     {% if current_employment %}<input type="hidden" name="employment" value="{{ current_employment }}">{% endif %}
 </form>
@@ -22,40 +29,36 @@
 
 {% if employment_counts %}
 <div class="filter-bar">
-    <span class="filter-label">Занятость:</span>
+    <span class="filter-label">Занятость</span>
     {% if employment_counts.get('part') %}
     <a href="/vacancies?employment=part{% if current_status %}&status={{ current_status }}{% endif %}{{ sq }}" class="filter-pill filter-pill--sm {% if current_employment == 'part' %}active{% endif %}">
-        Частичная ({{ employment_counts.part }})
+        Частичная <span class="num">·{{ employment_counts.part }}</span>
     </a>
     {% endif %}
     {% if employment_counts.get('project') %}
     <a href="/vacancies?employment=project{% if current_status %}&status={{ current_status }}{% endif %}{{ sq }}" class="filter-pill filter-pill--sm {% if current_employment == 'project' %}active{% endif %}">
-        Проектная ({{ employment_counts.project }})
+        Проектная <span class="num">·{{ employment_counts.project }}</span>
     </a>
     {% endif %}
     {% if employment_counts.get('full') %}
     <a href="/vacancies?employment=full{% if current_status %}&status={{ current_status }}{% endif %}{{ sq }}" class="filter-pill filter-pill--sm {% if current_employment == 'full' %}active{% endif %}">
-        Полная ({{ employment_counts.full }})
+        Полная <span class="num">·{{ employment_counts.full }}</span>
     </a>
     {% endif %}
     {% if current_employment %}
     <a href="/vacancies{% if current_status %}?status={{ current_status }}{{ sq }}{% elif current_search %}?q={{ current_search }}{% endif %}" class="filter-pill filter-pill--sm filter-pill--reset">
-        Сбросить
+        ✕ сбросить
     </a>
     {% endif %}
 </div>
 {% endif %}
 
 <div class="filter-bar">
-    <span class="filter-label">Группировка:</span>
+    <span class="filter-label">Группировка</span>
     {% if current_group == 'company' %}
-    <a href="/vacancies?{% if current_status %}status={{ current_status }}&{% endif %}{% if current_employment %}employment={{ current_employment }}&{% endif %}{% if current_search %}q={{ current_search }}{% endif %}" class="filter-pill filter-pill--sm active">
-        По компаниям
-    </a>
+    <a href="/vacancies?{% if current_status %}status={{ current_status }}&{% endif %}{% if current_employment %}employment={{ current_employment }}&{% endif %}{% if current_search %}q={{ current_search }}{% endif %}" class="filter-pill filter-pill--sm active">по компаниям</a>
     {% else %}
-    <a href="/vacancies?group=company{% if current_status %}&status={{ current_status }}{% endif %}{% if current_employment %}&employment={{ current_employment }}{% endif %}{{ sq }}" class="filter-pill filter-pill--sm">
-        По компаниям
-    </a>
+    <a href="/vacancies?group=company{% if current_status %}&status={{ current_status }}{% endif %}{% if current_employment %}&employment={{ current_employment }}{% endif %}{{ sq }}" class="filter-pill filter-pill--sm">по компаниям</a>
     {% endif %}
 </div>
 
@@ -63,21 +66,21 @@
 <tr>
     <td>
         <a href="{{ v.url }}" target="_blank">{{ v.title }}</a>
-        {% if v.schedule == 'remote' %}<small class="text-muted">(удалённо)</small>{% endif %}
+        {% if v.schedule == 'remote' %} <small class="text-muted">удал.</small>{% endif %}
         {% if v.description %}
         <details class="vacancy-details">
-            <summary>Описание</summary>
+            <summary>описание</summary>
             <div class="vacancy-description">{{ v.description | safe }}</div>
         </details>
         {% endif %}
     </td>
     <td>{{ v.company_name or '—' }}</td>
-    <td>
+    <td class="num">
         {% if v.salary_from or v.salary_to %}
-            {{ v.salary_from or '?' }}–{{ v.salary_to or '?' }} {{ v.salary_currency or '' }}
+            {{ v.salary_from or '?' }}–{{ v.salary_to or '?' }} <small class="text-muted">{{ v.salary_currency or '' }}</small>
         {% else %}—{% endif %}
     </td>
-    <td>
+    <td class="num">
         {% if v.relevance_score %}
         <span class="{% if v.relevance_score >= 0.7 %}score-high{% elif v.relevance_score >= 0.5 %}score-medium{% else %}score-low{% endif %}">
             {{ "%.0f"|format(v.relevance_score * 100) }}%
@@ -93,10 +96,10 @@
         {% if v.employment == 'part' %}<span class="badge badge-parttime">Частичная</span> {% endif %}
         {% if v.employment == 'project' %}<span class="badge badge-project">Проект</span> {% endif %}
         {% if v.matched_skills %}
-        <div class="skills-matched">{{ v.matched_skills | join(', ') }}</div>
+        <div class="skills-matched">{{ v.matched_skills | join(' · ') }}</div>
         {% endif %}
         {% if v.missing_skills %}
-        <div class="skills-missing">{{ v.missing_skills | join(', ') }}</div>
+        <div class="skills-missing">{{ v.missing_skills | join(' · ') }}</div>
         {% endif %}
         {% if not v.matched_skills and not v.missing_skills and v.employment not in ['part', 'project'] %}—{% endif %}
     </td>
@@ -104,15 +107,15 @@
     <td>
         {% if v.status == 'scored' %}
         <button hx-post="/api/vacancies/{{ v.id }}/generate-letter"
-                hx-swap="none" class="btn-sm outline primary">
-            Создать письмо
+                hx-swap="none" class="btn-sm">
+            ✎ письмо
         </button>
         {% endif %}
         <button hx-post="/api/vacancies/{{ v.id }}/blacklist"
                 hx-swap="none"
                 hx-confirm="Заблокировать {{ v.company_name }}?"
                 class="btn-sm outline contrast">
-            В ЧС
+            ⌀ ЧС
         </button>
     </td>
 </tr>
@@ -120,9 +123,9 @@
 
 {% if grouped %}
     {% for company, company_vacancies in grouped.items() %}
-    <h4 class="group-header">{{ company }} ({{ company_vacancies|length }})</h4>
+    <h4 class="group-header">{{ company }} · {{ company_vacancies|length }}</h4>
     <div class="table-wrapper">
-    <table class="table-compact table-hover">
+    <table class="table-compact">
         <thead>
             <tr>
                 <th>Вакансия</th>
@@ -145,7 +148,7 @@
     {% endfor %}
 {% else %}
 <div class="table-wrapper">
-<table class="table-compact table-hover">
+<table class="table-compact">
     <thead>
         <tr>
             <th>Вакансия</th>
@@ -169,8 +172,8 @@
 
 {% if not grouped and (page > 0 or has_more) %}
 <div class="pagination">
-    {% if page > 0 %}<a href="/vacancies?page={{ page - 1 }}&status={{ current_status or '' }}&employment={{ current_employment or '' }}{{ sq }}" role="button" class="outline">Назад</a>{% endif %}
-    {% if has_more %}<a href="/vacancies?page={{ page + 1 }}&status={{ current_status or '' }}&employment={{ current_employment or '' }}{{ sq }}" role="button" class="outline">Далее</a>{% endif %}
+    {% if page > 0 %}<a href="/vacancies?page={{ page - 1 }}&status={{ current_status or '' }}&employment={{ current_employment or '' }}{{ sq }}" role="button">← Назад</a>{% endif %}
+    {% if has_more %}<a href="/vacancies?page={{ page + 1 }}&status={{ current_status or '' }}&employment={{ current_employment or '' }}{{ sq }}" role="button">Далее →</a>{% endif %}
 </div>
 {% endif %}
 {% endblock %}

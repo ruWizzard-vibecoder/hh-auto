@@ -1,14 +1,21 @@
 {% extends "base.html" %}
 {% block title %}Сводки — hh-auto{% endblock %}
 {% block content %}
-<h1>Дневные сводки</h1>
+
+<header class="page-mast">
+    <h1>Сводки<span class="count">№{{ summaries|length if summaries else 0 }}</span></h1>
+    <div class="mast-stamp">
+        <strong>ЕЖЕДНЕВНЫЕ ОТЧЁТЫ</strong><br>
+        <span class="vmrl">●</span> архив редактора · <span data-edition-date>—</span>
+    </div>
+</header>
 
 <div class="filter-bar">
     <button hx-post="/api/summaries/generate"
             hx-swap="none"
             hx-on::after-request="location.reload()"
             class="primary">
-        Сформировать сводку за сегодня
+        ✎ Сформировать сводку за сегодня
     </button>
 </div>
 
@@ -16,16 +23,14 @@
 <div>
     {% for s in summaries %}
     <article>
-        <header>
+        <header style="border-bottom: none; padding: 0; margin-bottom: 0;">
             <div class="summary-header">
                 <strong>{{ s.summary_date.strftime('%d %B %Y') }}</strong>
                 <div class="summary-meta">
-                    <span>Вакансий: <strong>{{ s.vacancies_discovered }}</strong></span>
-                    <span>Откликов: <strong>{{ s.applications_sent }}</strong></span>
-                    <span>Ответов: <strong>{{ s.responses_received }}</strong></span>
-                    <span>Ср. оценка: <strong class="{% if s.avg_relevance_score and s.avg_relevance_score >= 0.7 %}score-high{% elif s.avg_relevance_score and s.avg_relevance_score >= 0.5 %}score-medium{% else %}score-low{% endif %}">
-                        {{ "%.0f"|format((s.avg_relevance_score or 0) * 100) }}%
-                    </strong></span>
+                    <span>вакансий <strong class="num">{{ s.vacancies_discovered }}</strong></span>
+                    <span>откликов <strong class="num">{{ s.applications_sent }}</strong></span>
+                    <span>ответов <strong class="num">{{ s.responses_received }}</strong></span>
+                    <span>ср.оценка <strong class="num {% if s.avg_relevance_score and s.avg_relevance_score >= 0.7 %}score-high{% elif s.avg_relevance_score and s.avg_relevance_score >= 0.5 %}score-medium{% else %}score-low{% endif %}">{{ "%.0f"|format((s.avg_relevance_score or 0) * 100) }}%</strong></span>
                 </div>
             </div>
         </header>
@@ -40,7 +45,7 @@
             {% if s.top_vacancies %}
             <h4>Лучшие вакансии</h4>
             <div class="table-wrapper">
-            <table class="table-compact table-hover">
+            <table class="table-compact">
                 <thead>
                     <tr><th>Вакансия</th><th>Компания</th><th>Оценка</th><th>Почему интересна</th></tr>
                 </thead>
@@ -51,7 +56,7 @@
                             {% if v.url %}<a href="{{ v.url }}" target="_blank">{{ v.title }}</a>{% else %}{{ v.title }}{% endif %}
                         </td>
                         <td>{{ v.company or '—' }}</td>
-                        <td>
+                        <td class="num">
                             {% if v.score %}
                             <span class="{% if v.score >= 0.7 %}score-high{% elif v.score >= 0.5 %}score-medium{% else %}score-low{% endif %}">
                                 {{ "%.0f"|format(v.score * 100) }}%
@@ -69,13 +74,18 @@
             {% if s.interview_prep %}
             <h4>Подготовка к собеседованиям</h4>
             {% for prep in s.interview_prep %}
-            <div class="cover-letter-card">
+            <article class="cover-letter-card">
                 <header>
-                    <strong>{{ prep.vacancy_title }}</strong> @ {{ prep.company or '?' }}
+                    <div>
+                        <span class="letter-head-title">
+                            {{ prep.vacancy_title }}
+                            <span class="letter-head-co">@ {{ prep.company or '?' }}</span>
+                        </span>
+                    </div>
                 </header>
 
                 {% if prep.questions_to_prepare %}
-                <p><strong>Вопросы для подготовки:</strong></p>
+                <p><strong>Вопросы для подготовки</strong></p>
                 <ul>
                     {% for q in prep.questions_to_prepare %}
                     <li>{{ q }}</li>
@@ -84,7 +94,7 @@
                 {% endif %}
 
                 {% if prep.projects_to_highlight %}
-                <p><strong>Проекты для упоминания:</strong></p>
+                <p><strong>Проекты для упоминания</strong></p>
                 <ul>
                     {% for p in prep.projects_to_highlight %}
                     <li>{{ p }}</li>
@@ -93,7 +103,7 @@
                 {% endif %}
 
                 {% if prep.tech_topics_to_review %}
-                <p><strong>Темы для повторения:</strong></p>
+                <p><strong>Темы для повторения</strong></p>
                 <ul>
                     {% for t in prep.tech_topics_to_review %}
                     <li>{{ t }}</li>
@@ -102,9 +112,9 @@
                 {% endif %}
 
                 {% if prep.company_research %}
-                <p><strong>О компании:</strong> {{ prep.company_research }}</p>
+                <p><strong>О компании.</strong> {{ prep.company_research }}</p>
                 {% endif %}
-            </div>
+            </article>
             {% endfor %}
             {% endif %}
 
@@ -117,6 +127,6 @@
     {% endfor %}
 </div>
 {% else %}
-<p>Сводок пока нет. Нажмите «Сформировать сводку» после первого цикла поиска.</p>
+<p class="text-muted" style="font-family: var(--mono); letter-spacing: .1em; text-transform: uppercase; font-size: 11px; padding: 24px 0;">···  сводок ещё нет — нажмите «сформировать» после первого цикла поиска  ···</p>
 {% endif %}
 {% endblock %}

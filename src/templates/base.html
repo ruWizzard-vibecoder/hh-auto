@@ -1,24 +1,38 @@
 <!DOCTYPE html>
-<html lang="ru" data-theme="dark">
+<html lang="ru">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>{% block title %}hh-auto{% endblock %}</title>
-    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@picocss/pico@2/css/pico.slate.min.css">
+    <meta name="color-scheme" content="dark">
+    <title>{% block title %}hh-auto · ИЗДАНИЕ{% endblock %}</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link rel="stylesheet" href="/static/style.css">
     <script src="/static/htmx.min.js"></script>
     <style>
         .htmx-toast {
-            position: fixed; bottom: 20px; right: 20px; z-index: 9999;
-            padding: 12px 20px; border-radius: 8px; color: #fff;
-            font-size: 14px; max-width: 400px; animation: fadeIn .2s;
+            position: fixed; bottom: 24px; right: 24px; z-index: 9999;
+            padding: 12px 18px; border-radius: 2px;
+            font-family: 'IBM Plex Mono', monospace;
+            font-size: 12px;
+            letter-spacing: 0.06em;
+            text-transform: uppercase;
+            color: #F2EDDF;
+            background: #16140F;
+            border: 1px solid #3D3930;
+            border-left: 3px solid #E63E11;
+            max-width: 380px;
+            box-shadow: 0 16px 40px rgba(0,0,0,.5);
+            animation: toast-in .22s ease-out;
         }
-        .htmx-toast--error { background: #c0392b; }
-        .htmx-toast--success { background: #27ae60; }
-        @keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
-        .htmx-request { opacity: 0.6; pointer-events: none; }
+        .htmx-toast--success { border-left-color: #7DA672; }
+        @keyframes toast-in {
+            from { opacity: 0; transform: translateY(8px); }
+            to   { opacity: 1; transform: translateY(0); }
+        }
     </style>
     <script>
+        // Toast notifications for HTMX events
         function showToast(msg, type) {
             var t = document.createElement('div');
             t.className = 'htmx-toast htmx-toast--' + (type || 'error');
@@ -26,21 +40,17 @@
             document.body.appendChild(t);
             setTimeout(function() { t.remove(); }, 4000);
         }
-        // Network error — request never reached server
         document.addEventListener('htmx:sendError', function(e) {
             e.detail.elt.classList.remove('htmx-request');
-            showToast('Ошибка сети — действие не выполнено. Попробуйте ещё раз.');
+            showToast('Сбой связи — действие не выполнено');
         });
-        // Server returned error status
         document.addEventListener('htmx:responseError', function(e) {
             e.detail.elt.classList.remove('htmx-request');
-            showToast('Ошибка сервера (' + e.detail.xhr.status + ') — действие не выполнено.');
+            showToast('Ошибка сервера ' + e.detail.xhr.status + ' — действие не выполнено');
         });
-        // Swap error — response can't replace target
-        document.addEventListener('htmx:swapError', function(e) {
-            showToast('Ошибка обновления — перезагрузите страницу.');
+        document.addEventListener('htmx:swapError', function() {
+            showToast('Сбой обновления — перезагрузите страницу');
         });
-        // Confirm successful actions
         document.addEventListener('htmx:afterSwap', function(e) {
             var verb = e.detail.requestConfig && e.detail.requestConfig.verb;
             var path = e.detail.pathInfo && e.detail.pathInfo.requestPath;
@@ -51,60 +61,89 @@
                 else if (path.includes('/edit')) showToast('Письмо сохранено', 'success');
             }
         });
+
+        // Edition stamp — date in Russian, no library
+        document.addEventListener('DOMContentLoaded', function() {
+            var months = ['янв', 'фев', 'мар', 'апр', 'май', 'июн', 'июл', 'авг', 'сен', 'окт', 'ноя', 'дек'];
+            var days = ['вс', 'пн', 'вт', 'ср', 'чт', 'пт', 'сб'];
+            var now = new Date();
+            var d = String(now.getDate()).padStart(2, '0');
+            var m = months[now.getMonth()];
+            var y = String(now.getFullYear()).slice(2);
+            var dow = days[now.getDay()];
+            var stamp = dow + ' · ' + d + ' ' + m + ' ' + y;
+            document.querySelectorAll('[data-edition-date]').forEach(function(el) {
+                el.textContent = stamp;
+            });
+            // edition number: days since project genesis 2025-12-01
+            var genesis = new Date(2025, 11, 1);
+            var num = Math.floor((now - genesis) / (1000 * 60 * 60 * 24)) + 1;
+            document.querySelectorAll('[data-edition-num]').forEach(function(el) {
+                el.textContent = '№' + num;
+            });
+        });
     </script>
 </head>
 <body>
     <div class="app-layout">
         <aside class="sidebar" id="sidebar">
             <div class="sidebar-brand">
-                <span class="brand-icon">HH</span>
-                <span class="brand-text">hh-auto</span>
+                <span class="brand-mast">hh<em>·</em>auto</span>
+                <span class="brand-edition">ИЗДАНИЕ <span data-edition-num>—</span></span>
             </div>
             <nav class="sidebar-nav">
                 <a href="/" class="sidebar-nav-item {% if request.url.path == '/' %}active{% endif %}">
-                    <span class="nav-icon">&#9776;</span>
+                    <span class="nav-num">01</span>
                     <span class="nav-text">Главная</span>
                 </a>
                 <a href="/cover-letters" class="sidebar-nav-item {% if request.url.path.startswith('/cover-letters') %}active{% endif %}">
-                    <span class="nav-icon">&#9993;</span>
+                    <span class="nav-num">02</span>
                     <span class="nav-text">Письма</span>
-                    {% if pending_count %}<span class="badge badge-pending">{{ pending_count }}</span>{% endif %}
+                    {% if pending_count %}<span class="badge-pending">{{ pending_count }}</span>{% endif %}
                 </a>
                 <a href="/vacancies" class="sidebar-nav-item {% if request.url.path.startswith('/vacancies') %}active{% endif %}">
-                    <span class="nav-icon">&#128188;</span>
+                    <span class="nav-num">03</span>
                     <span class="nav-text">Вакансии</span>
                 </a>
                 <a href="/applications" class="sidebar-nav-item {% if request.url.path.startswith('/applications') %}active{% endif %}">
-                    <span class="nav-icon">&#10004;</span>
+                    <span class="nav-num">04</span>
                     <span class="nav-text">Отклики</span>
                 </a>
                 <a href="/summaries" class="sidebar-nav-item {% if request.url.path.startswith('/summaries') %}active{% endif %}">
-                    <span class="nav-icon">&#128202;</span>
+                    <span class="nav-num">05</span>
                     <span class="nav-text">Сводки</span>
                 </a>
                 <a href="/analytics" class="sidebar-nav-item {% if request.url.path.startswith('/analytics') %}active{% endif %}">
-                    <span class="nav-icon">&#128200;</span>
+                    <span class="nav-num">06</span>
                     <span class="nav-text">Аналитика</span>
                 </a>
                 <a href="/settings" class="sidebar-nav-item {% if request.url.path.startswith('/settings') %}active{% endif %}">
-                    <span class="nav-icon">&#9881;</span>
+                    <span class="nav-num">07</span>
                     <span class="nav-text">Настройки</span>
                 </a>
             </nav>
             <div class="sidebar-footer">
-                <span hx-get="/api/status" hx-trigger="load, every 60s" hx-swap="innerHTML">Загрузка...</span>
+                <span hx-get="/api/status" hx-trigger="load, every 60s" hx-swap="innerHTML">···</span>
             </div>
         </aside>
 
         <header class="mobile-topbar">
-            <button class="sidebar-toggle" onclick="document.getElementById('sidebar').classList.toggle('sidebar-open');document.getElementById('sidebar-backdrop').classList.toggle('sidebar-backdrop-visible')">&#9776;</button>
-            <span class="brand-text">hh-auto</span>
+            <button class="sidebar-toggle" onclick="document.getElementById('sidebar').classList.toggle('sidebar-open');document.getElementById('sidebar-backdrop').classList.toggle('sidebar-backdrop-visible')">≡</button>
+            <span class="brand-text">hh<em>·</em>auto</span>
         </header>
 
         <div class="sidebar-backdrop" id="sidebar-backdrop" onclick="document.getElementById('sidebar').classList.remove('sidebar-open');this.classList.remove('sidebar-backdrop-visible')"></div>
 
         <main class="main-content">
             <div class="container">
+                <div style="margin: -16px 0 28px; padding: 11px 18px; background: linear-gradient(90deg, var(--vermilion-soft), transparent 70%); border: 1px solid var(--hairline); border-left: 3px solid var(--vermilion); font-family: var(--mono); font-size: 11.5px; letter-spacing: 0.04em; color: var(--ink-2); display: flex; justify-content: space-between; align-items: center; gap: 16px;">
+                    <span>
+                        <span style="color: var(--vermilion); font-weight: 600;">●</span> вы смотрите старый интерфейс. Новый — на той же машине, порт <strong style="color: var(--ink); font-family: var(--sans); letter-spacing: normal;">:8101</strong>
+                    </span>
+                    <a href="http://192.168.31.55:8101{{ request.url.path }}" target="_self" style="display: inline-flex; align-items: center; gap: 6px; padding: 5px 12px; background: var(--vermilion); color: var(--paper); font-family: var(--sans); font-size: 12px; font-weight: 600; letter-spacing: 0.04em; border-radius: 2px; border: 1px solid var(--vermilion); text-decoration: none; white-space: nowrap;">
+                        Открыть новый UI →
+                    </a>
+                </div>
                 {% block content %}{% endblock %}
             </div>
         </main>

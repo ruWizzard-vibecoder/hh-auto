@@ -1,91 +1,102 @@
 {% extends "base.html" %}
 {% block title %}Главная — hh-auto{% endblock %}
 {% block content %}
-<h1>Главная</h1>
 
-<div class="stats-grid">
-    <div class="stat-card stat-card--blue">
-        <h2>{{ stats.total_vacancies }}</h2>
-        <p>Вакансий найдено</p>
+<header class="page-mast">
+    <h1>Главная<span class="count">№01</span></h1>
+    <div class="mast-stamp">
+        <strong>ОПЕРАЦИОННАЯ СВОДКА</strong><br>
+        <span class="vmrl">●</span> вып. <span data-edition-num>—</span> · <span data-edition-date>—</span>
     </div>
-    <div class="stat-card stat-card--yellow">
-        <h2>{{ stats.pending_letters }}</h2>
-        <p>Ждут проверки</p>
+</header>
+
+<section class="figures">
+    <div class="figure" data-num="01">
+        <span class="figure-num num">{{ stats.total_vacancies }}</span>
+        <span class="figure-label">Вакансий найдено</span>
     </div>
-    <div class="stat-card stat-card--green">
-        <h2>{{ stats.applications_sent }}</h2>
-        <p>Откликов отправлено</p>
+    <div class="figure" data-num="02">
+        <span class="figure-num num {% if stats.pending_letters > 0 %}is-hot{% endif %}">{{ stats.pending_letters }}</span>
+        <span class="figure-label">Ждут проверки</span>
     </div>
-    <div class="stat-card stat-card--teal">
-        <h2>{{ stats.applications_today }}</h2>
-        <p>Сегодня</p>
+    <div class="figure" data-num="03">
+        <span class="figure-num num is-indigo">{{ stats.applications_sent }}</span>
+        <span class="figure-label">Откликов отправлено</span>
     </div>
-    <div class="stat-card stat-card--purple">
-        <h2>{{ stats.viewed }}</h2>
-        <p>Просмотрено</p>
+    <div class="figure" data-num="04">
+        <span class="figure-num num">{{ stats.applications_today }}</span>
+        <span class="figure-label">Сегодня</span>
     </div>
-    <div class="stat-card stat-card--peach">
-        <h2>{{ stats.invited }}</h2>
-        <p>Приглашений</p>
+    <div class="figure" data-num="05">
+        <span class="figure-num num is-gold">{{ stats.viewed }}</span>
+        <span class="figure-label">Просмотрено</span>
     </div>
-</div>
+    <div class="figure" data-num="06">
+        <span class="figure-num num is-sage">{{ stats.invited }}</span>
+        <span class="figure-label">Приглашений</span>
+    </div>
+</section>
 
 {% if stats.pending_letters > 0 %}
 <article class="pending-alert">
-    <header><strong>{{ stats.pending_letters }} писем ожидают проверки</strong></header>
-    <a href="/cover-letters?status=pending" role="button" class="primary">Проверить</a>
+    <div class="alert-text">
+        <strong>{{ stats.pending_letters }} писем ждут вашего слова</strong>
+        <small>проверка очереди — основная задача дня</small>
+    </div>
+    <a href="/cover-letters?status=pending" role="button" class="primary">Открыть очередь →</a>
 </article>
 {% endif %}
 
 <h2>Воронка</h2>
 {% set max_funnel = stats.total_vacancies if stats.total_vacancies > 0 else 1 %}
 <div class="funnel">
-    <div class="funnel-step">
+    <div class="funnel-row">
         <span class="funnel-label">Найдено</span>
         <div class="funnel-track">
             <div class="funnel-bar funnel-bar--blue" style="--w: 100%"></div>
         </div>
-        <span class="funnel-value">{{ stats.total_vacancies }}</span>
+        <span class="funnel-value num">{{ stats.total_vacancies }}</span>
     </div>
-    <div class="funnel-step">
+    <div class="funnel-row">
         <span class="funnel-label">Оценено</span>
         <div class="funnel-track">
             <div class="funnel-bar funnel-bar--purple" style="--w: {{ (stats.scored / max_funnel * 100)|round|int }}%"></div>
         </div>
-        <span class="funnel-value">{{ stats.scored }}</span>
+        <span class="funnel-value num">{{ stats.scored }}</span>
     </div>
-    <div class="funnel-step">
+    <div class="funnel-row">
         <span class="funnel-label">Письма</span>
         <div class="funnel-track">
             <div class="funnel-bar funnel-bar--yellow" style="--w: {{ (stats.letters_total / max_funnel * 100)|round|int }}%"></div>
         </div>
-        <span class="funnel-value">{{ stats.letters_total }}</span>
+        <span class="funnel-value num">{{ stats.letters_total }}</span>
     </div>
-    <div class="funnel-step">
+    <div class="funnel-row">
         <span class="funnel-label">Одобрено</span>
         <div class="funnel-track">
             <div class="funnel-bar funnel-bar--green" style="--w: {{ (stats.approved / max_funnel * 100)|round|int }}%"></div>
         </div>
-        <span class="funnel-value">{{ stats.approved }}</span>
+        <span class="funnel-value num">{{ stats.approved }}</span>
     </div>
-    <div class="funnel-step">
+    <div class="funnel-row">
         <span class="funnel-label">Отправлено</span>
         <div class="funnel-track">
             <div class="funnel-bar funnel-bar--teal" style="--w: {{ (stats.applications_sent / max_funnel * 100)|round|int }}%"></div>
         </div>
-        <span class="funnel-value">{{ stats.applications_sent }}</span>
+        <span class="funnel-value num">{{ stats.applications_sent }}</span>
     </div>
-    <div class="funnel-step">
+    <div class="funnel-row">
         <span class="funnel-label">Ответ</span>
         <div class="funnel-track">
             <div class="funnel-bar funnel-bar--peach" style="--w: {{ (stats.responded / max_funnel * 100)|round|int }}%"></div>
         </div>
-        <span class="funnel-value">{{ stats.responded }}</span>
+        <span class="funnel-value num">{{ stats.responded }}</span>
     </div>
 </div>
 
-<h2>Последние события</h2>
+<h2>Хроника</h2>
 <div hx-get="/api/events/recent" hx-trigger="load" hx-swap="innerHTML">
-    <p aria-busy="true">Загрузка...</p>
+    <p class="text-muted" style="font-family: var(--mono); letter-spacing: .1em; text-transform: uppercase; font-size: 11px;">···  загрузка ленты  ···</p>
 </div>
+
 {% endblock %}
