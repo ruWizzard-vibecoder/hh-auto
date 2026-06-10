@@ -1,0 +1,30 @@
+# Overlay: add Next.js frontend service alongside the FastAPI app.
+# Usage on NAS:
+#   docker compose -f docker-compose.yml -f docker-compose.web.yml up -d --build
+#
+# Exposes the new UI on host port 8101 (Tailscale-only, alongside :8100 backend).
+# In-container DNS: the Next app reaches FastAPI via http://app:8100.
+
+services:
+  web:
+    build:
+      context: ./web
+      dockerfile: Dockerfile
+    container_name: hh-auto-web
+    restart: unless-stopped
+    ports:
+      - "8101:3000"
+    environment:
+      - NODE_ENV=production
+      - NEXT_PUBLIC_BACKEND_URL=http://app:8100
+      - NEXT_TELEMETRY_DISABLED=1
+    depends_on:
+      app:
+        condition: service_healthy
+    networks:
+      - default
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://localhost:3000/"]
+      interval: 30s
+      timeout: 5s
+      retries: 3

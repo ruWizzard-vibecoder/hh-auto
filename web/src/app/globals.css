@@ -1,0 +1,137 @@
+@import 'tailwindcss';
+@import 'tw-animate-css';
+
+/* ============================================================================
+   ИЗДАНИЕ — design tokens (Tailwind 4 @theme)
+   Warm ink palette + vermilion signal. Display: EB Garamond italic.
+   ============================================================================ */
+
+@theme {
+  /* — Paper & Ink — */
+  --color-paper:         #0F0E0C;
+  --color-paper-rise:    #1A1815;
+  --color-paper-sink:    #16140F;
+  --color-paper-edge:    #221F1A;
+  --color-hairline:      #2A271F;
+  --color-hairline-bold: #3D3930;
+  --color-ink:           #F2EDDF;
+  --color-ink-2:         #A89F8A;
+  --color-ink-3:         #6B6557;
+  --color-ink-4:         #443F35;
+
+  /* — Signal — */
+  --color-vermilion:      #E63E11;
+  --color-vermilion-dim:  #B33208;
+  --color-vermilion-soft: #1F1411;
+
+  --color-gold:      #D9A742;
+  --color-gold-dim:  #8A6B26;
+  --color-gold-soft: #1F1A0E;
+
+  --color-sage:      #7DA672;
+  --color-sage-dim:  #4F6F47;
+  --color-sage-soft: #131A11;
+
+  --color-brick:      #B5402E;
+  --color-brick-dim:  #7A2A1C;
+  --color-brick-soft: #1B100D;
+
+  --color-indigo:      #758CB1;
+  --color-indigo-dim:  #475C7E;
+  --color-indigo-soft: #11141B;
+
+  /* — Type — */
+  --font-display: var(--font-display), 'EB Garamond', Georgia, serif;
+  --font-sans:    var(--font-sans), -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
+  --font-mono:    var(--font-mono), 'JetBrains Mono', 'IBM Plex Mono', Menlo, monospace;
+
+  /* — shadcn semantic aliases (so shadcn-style components Just Work) — */
+  --color-background:        var(--color-paper);
+  --color-foreground:        var(--color-ink);
+  --color-card:              var(--color-paper-rise);
+  --color-card-foreground:   var(--color-ink);
+  --color-popover:           var(--color-paper-rise);
+  --color-popover-foreground:var(--color-ink);
+  --color-primary:           var(--color-vermilion);
+  --color-primary-foreground:var(--color-paper);
+  --color-secondary:         var(--color-paper-edge);
+  --color-secondary-foreground:var(--color-ink);
+  --color-muted:             var(--color-paper-sink);
+  --color-muted-foreground:  var(--color-ink-2);
+  --color-accent:            var(--color-paper-edge);
+  --color-accent-foreground: var(--color-ink);
+  --color-destructive:       var(--color-brick);
+  --color-destructive-foreground: var(--color-ink);
+  --color-border:            var(--color-hairline);
+  --color-input:             var(--color-hairline-bold);
+  --color-ring:              var(--color-vermilion);
+
+  --radius: 2px;
+  --radius-sm: 2px;
+  --radius-md: 2px;
+  --radius-lg: 3px;
+  --radius-xl: 4px;
+}
+
+@layer base {
+  *,
+  *::before,
+  *::after {
+    border-color: var(--color-border);
+  }
+
+  html {
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+    text-rendering: optimizeLegibility;
+    font-feature-settings: 'kern', 'liga', 'calt';
+  }
+
+  body {
+    background:
+      radial-gradient(ellipse 80% 50% at 50% -10%, color-mix(in srgb, var(--color-vermilion) 6%, transparent), transparent 60%),
+      var(--color-paper);
+    background-attachment: fixed;
+    color: var(--color-ink);
+    font-family: var(--font-sans);
+    font-size: 14.5px;
+    line-height: 1.55;
+  }
+
+  /* film grain — fixed overlay */
+  body::before {
+    content: '';
+    position: fixed;
+    inset: 0;
+    pointer-events: none;
+    z-index: 1;
+    opacity: 0.025;
+    background-image: url("data:image/svg+xml;utf8,<svg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'><filter id='n'><feTurbulence type='fractalNoise' baseFrequency='0.95' numOctaves='2' stitchTiles='stitch'/></filter><rect width='100%25' height='100%25' filter='url(%23n)'/></svg>");
+    mix-blend-mode: overlay;
+  }
+
+  ::selection {
+    background: var(--color-vermilion);
+    color: var(--color-paper);
+  }
+
+  /* tabular figures for numeric content */
+  .num,
+  [data-num] {
+    font-feature-settings: 'tnum' 1, 'lnum' 1;
+    font-variant-numeric: tabular-nums lining-nums;
+  }
+
+  /* scrollbar */
+  ::-webkit-scrollbar { width: 10px; height: 10px; }
+  ::-webkit-scrollbar-track { background: var(--color-paper-sink); }
+  ::-webkit-scrollbar-thumb {
+    background: var(--color-hairline-bold);
+    border: 2px solid var(--color-paper-sink);
+  }
+  ::-webkit-scrollbar-thumb:hover { background: var(--color-vermilion-dim); }
+}
+
+@layer utilities {
+  .font-display { font-family: var(--font-display); }
+}
