@@ -43,6 +43,11 @@ class Settings(BaseSettings):
     # and can have letters generated manually via UI button
     auto_generate_score: float = 0.7
 
+    # Minimum krrkt informational-style score (0-10) for generated RU letters.
+    # 7.5 is krrkt's "green" boundary; historical letters score 7.5-9.0, so this
+    # acts as a floor against style regressions. 0 disables the gate.
+    krrkt_min_score: float = 7.5
+
     # When user approves a cover letter, enqueue the source vacancy for similar-vacancies expansion
     expansion_on_approve: bool = True
     expansion_on_approve_per_seed: int = 20

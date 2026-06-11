@@ -26,6 +26,9 @@ aiogram>=3.15.0
 # Browser automation (fallback)
 playwright>=1.49.0
 
+# Russian informational-style scoring for generated cover letters (offline, no LLM)
+krrkt==1.5.4
+
 # Config & utilities
 pydantic-settings>=2.7.0
 python-dotenv>=1.0.0

@@ -309,6 +309,36 @@ def _ai_cliche_reason(text: str, lang: str) -> str | None:
     return None
 
 
+# --- krrkt informational-style gate ----------------------------------------
+async def _krrkt_gate_reason(text: str, lang: str) -> str | None:
+    """Score a RU letter with krrkt (informational style, 0-10, offline fast
+    layer — no LLM call). Returns a reject tag when the score is below
+    settings.krrkt_min_score, None otherwise.
+
+    EN letters are skipped (krrkt is Russian-only). A missing krrkt package or
+    a scorer crash degrades gracefully: the gate never blocks generation by
+    itself, it only filters style regressions when available.
+    """
+    if lang == "en" or settings.krrkt_min_score <= 0:
+        return None
+    try:
+        from krrkt.engine.pipeline import proofread
+    except ImportError:
+        logger.warning("krrkt not installed — style gate skipped")
+        return None
+    try:
+        result = await proofread(text, skip_llm=True)
+    except Exception as e:
+        logger.warning(f"krrkt scoring failed — style gate skipped: {e}")
+        return None
+    score = float(result.score)
+    if score < settings.krrkt_min_score:
+        worst = [f.word for f in result.findings if f.weight >= 80][:5]
+        return f"krrkt_score:{score}<{settings.krrkt_min_score}:{','.join(worst)}"
+    logger.info(f"krrkt style score: {score} (threshold {settings.krrkt_min_score})")
+    return None
+
+
 # --- Keyword-stuffing detection -------------------------------------------
 # A letter that parrots the vacancy's keyword list reads as filter-gaming and
 # hurts conversion. Two heuristics:
@@ -591,8 +621,9 @@ async def generate_cover_letter(
     2. Wrap untrusted text in <vacancy_data>…</vacancy_data> fence.
     3. System prompt is prefixed with an explicit security block telling the model to treat fenced text as DATA.
     4. Output is validated for known injection footprints, keyword stuffing and
-       AI-boilerplate clichés; failure raises CoverLetterRejectedError after
-       `max_retries` attempts.
+       AI-boilerplate clichés, then RU letters pass a krrkt informational-style
+       gate (score >= settings.krrkt_min_score); failure raises
+       CoverLetterRejectedError after `max_retries` attempts.
     """
     clean_desc = _clean_html(description) if description else (
         "No description provided" if _detect_language(title) == "en" else "Описание не указано"
@@ -640,6 +671,9 @@ async def generate_cover_letter(
             expected_screening_count=len(screening_questions),
             key_skills=key_skills,
         )
+        if ok:
+            reason = await _krrkt_gate_reason(response.text, lang)
+            ok = reason is None
         if ok:
             if attempt > 0:
                 logger.info(f"Cover letter accepted on retry #{attempt} ('{title}')")

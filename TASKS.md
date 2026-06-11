@@ -109,3 +109,9 @@ WHERE generated_text ~* '(погода в москве|john deere|дизельн
 - `_ai_cliche_reason()` в `_validate_letter`: 26 RU + 21 EN стоп-паттернов (зеркалят промпт). 1 хит терпим, 2+ разных паттерна → reject → retry → `CoverLetterRejectedError`
 - Калибровка на 50 последних отправленных письмах: 4 флага (8%), все true positives («aligns perfectly», «глубокое понимание», «обширный опыт»); enum-run false positives — 0
 - +5 тестов (всего 39/39)
+
+### [x] krrkt style gate в генераторе писем (2026-06-11)
+- `krrkt==1.5.4` в requirements (offline fast layer, без LLM-вызовов)
+- `_krrkt_gate_reason()` после `_validate_letter` в generate-цикле: RU-письма скорятся `krrkt.engine.pipeline.proofread(skip_llm=True)`; score < `settings.krrkt_min_score` → reject → retry → `CoverLetterRejectedError`. EN скипается (krrkt только для русского), отсутствие пакета/краш скорера деградирует мягко (gate пропускает)
+- Порог `krrkt_min_score=7.5` (зелёная зона krrkt; env `HH_AUTO_KRRKT_MIN_SCORE`, 0 = выключить). Калибровка: 47 исторических RU-писем скорят 7.5–9.0 (median 8.3) — порог = пол против деградации стиля
+- +5 тестов (всего 44/44)

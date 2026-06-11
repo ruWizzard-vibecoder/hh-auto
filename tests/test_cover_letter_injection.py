@@ -245,6 +245,84 @@ def test_system_prompts_carry_cliche_ban():
     assert "AI-SLOP BAN" in clg.SYSTEM_PROMPT_EN
 
 
+# ─── krrkt informational-style gate ────────────────────────────────────────
+
+_CANC_LETTER = (
+    "Здравствуйте! Данная вакансия является интересной возможностью. Осуществлял "
+    "деятельность по реализации проектов, являюсь специалистом в данной области. "
+    "Производил настройку и внедрение систем, осуществлял взаимодействие с командой. "
+    "Данный опыт является релевантным. Хотелось бы отметить, что осуществление "
+    "поставленных задач является моим приоритетом. В целях обеспечения качества "
+    "осуществлял контроль процессов. Данное направление является перспективным, "
+    "и я являюсь мотивированным кандидатом для осуществления данной деятельности."
+)
+
+_CLEAN_LETTER = (
+    "Добрый день! Заинтересовала ваша вакансия AI/Automation Engineer, особенно "
+    "работа с RAG-системами и multi-agent оркестрацией. В своих проектах я строил "
+    "production-пайплайны на FastAPI и Python: автоматизированный поиск вакансий "
+    "с LLM-скорингом релевантности через function calling, RAG-агентов по "
+    "корпоративной базе знаний (40+ Docker-контейнеров), а также n8n-флоу для "
+    "интеграции CRM с внешними источниками. Готов обсудить детали по созвону."
+)
+
+
+@pytest.mark.asyncio
+async def test_krrkt_gate_rejects_bureaucratese():
+    reason = await clg._krrkt_gate_reason(_CANC_LETTER, lang="ru")
+    assert reason is not None
+    assert reason.startswith("krrkt_score:")
+
+
+@pytest.mark.asyncio
+async def test_krrkt_gate_passes_clean_letter():
+    reason = await clg._krrkt_gate_reason(_CLEAN_LETTER, lang="ru")
+    assert reason is None
+
+
+@pytest.mark.asyncio
+async def test_krrkt_gate_skips_english():
+    reason = await clg._krrkt_gate_reason("Whatever bureaucratic text", lang="en")
+    assert reason is None
+
+
+@pytest.mark.asyncio
+async def test_krrkt_gate_disabled_by_zero_threshold():
+    with patch.object(clg.settings, "krrkt_min_score", 0):
+        reason = await clg._krrkt_gate_reason(_CANC_LETTER, lang="ru")
+    assert reason is None
+
+
+# Bureaucratese that deliberately avoids the _AI_CLICHES_RU stop-list (so it
+# passes _validate_letter) but scores 6.1 on krrkt — only the gate catches it.
+_CANC_LETTER_NO_CLICHES = (
+    "Здравствуйте! Прошу рассмотреть мою кандидатуру на указанную позицию. Моя "
+    "профессиональная деятельность является связанной с реализацией проектов по "
+    "внедрению информационных систем. В рамках выполнения должностных обязанностей "
+    "мною производилась настройка программного обеспечения, а также было обеспечено "
+    "взаимодействие со смежными подразделениями. Имеется значительное количество "
+    "реализованных проектов в области автоматизации бизнес-процессов. "
+    "Производственная деятельность велась в соответствии с установленными "
+    "требованиями. Готов к рассмотрению предложения о сотрудничестве в случае "
+    "наличия заинтересованности с вашей стороны."
+)
+
+
+@pytest.mark.asyncio
+async def test_generate_raises_when_letter_fails_krrkt_gate():
+    """End-to-end: a letter that passes injection/stuffing/cliché checks but
+    scores below the krrkt floor must be rejected through the same path."""
+    with patch.object(clg, "ai_complete", new=_async_return(_FakeResponse(_CANC_LETTER_NO_CLICHES))):
+        with pytest.raises(CoverLetterRejectedError, match="krrkt_score"):
+            await generate_cover_letter(
+                title="AI Engineer",
+                company_name="Тест",
+                description="Ищем инженера для автоматизации процессов с помощью LLM.",
+                key_skills=["Python"],
+                resume_text="Алексей, AI Engineer",
+            )
+
+
 # ─── Prompt assembly ───────────────────────────────────────────────────────
 
 def test_user_prompt_fences_untrusted_data():
