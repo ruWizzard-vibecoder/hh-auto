@@ -191,6 +191,60 @@ def test_system_prompts_carry_anti_stuffing_rules():
     assert "ANTI-KEYWORD-STUFFING" in clg.SYSTEM_PROMPT_EN
 
 
+# ─── AI-cliché (канцелярит) ────────────────────────────────────────────────
+
+def test_cliche_rejects_ru_boilerplate():
+    letter = (
+        "Здравствуйте! Ваша вакансия — уникальная возможность применить мой "
+        "богатый опыт. Обладаю широким спектром навыков и глубоким пониманием "
+        "процессов, готов внести вклад в развитие компании и стать частью команды. "
+        + _PAD_RU
+    )
+    ok, reason = _validate_letter(letter, lang="ru")
+    assert not ok
+    assert reason is not None and reason.startswith("ai_cliche:")
+
+
+def test_cliche_single_hit_tolerated():
+    """One borderline phrase happens in honest prose — don't over-reject."""
+    letter = (
+        "Здравствуйте! За три года выстроил автоматизацию маркетинга: ускорил "
+        "запуск кампаний с недели до дня. Имею достаточно широкий спектр задач "
+        "в текущей роли, но хочу сфокусироваться на AI-направлении. " + _PAD_RU
+    )
+    ok, reason = _validate_letter(letter, lang="ru")
+    assert ok, f"expected accept, got {reason}"
+
+
+def test_cliche_rejects_en_boilerplate():
+    letter = (
+        "Hello! I am excited to apply for this role. With my proven track record "
+        "and extensive experience, I am confident I am an ideal candidate who can "
+        "leverage my skills seamlessly in your dynamic environment. "
+        + "I built marketing automation that cut campaign launch time. " * 12
+    )
+    ok, reason = _validate_letter(letter, lang="en")
+    assert not ok
+    assert reason is not None and reason.startswith("ai_cliche:")
+
+
+def test_cliche_banned_stopwords_from_prompt_rules():
+    """The legacy banned list ('командный игрок' etc.) is now also enforced
+    by the validator, not just requested in the prompt."""
+    letter = (
+        "Здравствуйте! Я высокомотивированный командный игрок, стрессоустойчивый "
+        "и быстрообучаемый, нацелен на результат. " + _PAD_RU
+    )
+    ok, reason = _validate_letter(letter, lang="ru")
+    assert not ok
+    assert reason is not None and reason.startswith("ai_cliche:")
+
+
+def test_system_prompts_carry_cliche_ban():
+    assert "ИИ-КАНЦЕЛЯРИТ" in clg.SYSTEM_PROMPT_RU
+    assert "AI-SLOP BAN" in clg.SYSTEM_PROMPT_EN
+
+
 # ─── Prompt assembly ───────────────────────────────────────────────────────
 
 def test_user_prompt_fences_untrusted_data():

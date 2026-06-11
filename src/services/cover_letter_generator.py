@@ -58,6 +58,12 @@ SYSTEM_PROMPT_RU = SECURITY_BLOCK_RU + """Ты пишешь сопроводит
 - Если вакансия на подработку — подчеркни гибкость графика
 - Если вакансия на full-time — пиши как обычно, не упоминай подработку
 
+ИИ-КАНЦЕЛЯРИТ — ЗАПРЕЩЁН. Письмо не должно пахнуть нейросетью:
+- Запрещённые штампы: «уникальная возможность», «идеально подхожу/подходит», «богатый опыт», «обширный опыт», «широкий спектр», «глубокое понимание», «моя страсть», «резонирует», «позвольте мне», «не могу не отметить», «хотел бы подчеркнуть», «стоит отметить», «важно отметить», «внести вклад в развитие», «буду рад стать частью команды», «соответствует моим карьерным целям», «в современном мире», «в эпоху»
+- Канцелярит: не пиши «данный» (→ «этот»), «является» (→ тире или живой глагол), «осуществлять» (→ конкретный глагол), «в рамках», «посредством», «наличие опыта»
+- Отглагольные существительные → глаголы: не «производил настройку и внедрение», а «настроил и внедрил»
+- Каждое предложение сообщает факт. Если предложение можно выкинуть без потери смысла — выкинь его сам
+
 АНТИ-KEYWORD-STUFFING — письмо НЕ должно выглядеть как подгонка под фильтры:
 - НЕ пересказывай список требований вакансии и НЕ вставляй в письмо перечни ключевых слов из неё
 - НЕ перечисляй больше 3 технологий подряд через запятую. Каждая названная технология — в связке с конкретным проектом или результатом («на X построил Y, что дало Z»)
@@ -129,6 +135,11 @@ Tone rules:
 - Candidate is open to full-time and part-time/contract work
 - For part-time roles — emphasize schedule flexibility
 - For full-time roles — write normally, don't mention part-time
+
+AI-SLOP BAN — the letter must not smell like a chatbot:
+- Banned clichés: "I am excited to apply", "thrilled", "passionate about", "perfectly aligns", "aligns perfectly", "proven track record", "wealth of experience", "extensive experience", "unique opportunity", "delve", "leverage my skills", "honed my skills", "seamlessly", "dynamic environment", "in today's fast-paced world", "I would welcome the opportunity", "ideal candidate"
+- Prefer verbs over nominalizations ("configured and shipped", not "performed configuration and implementation")
+- Every sentence must carry a fact. If a sentence can be cut without losing meaning — cut it yourself
 
 ANTI-KEYWORD-STUFFING — the letter must NOT read as filter-gaming:
 - Do NOT retell the vacancy's requirements list or paste keyword runs from it
@@ -227,6 +238,75 @@ _INJECTION_FOOTPRINTS_EN = [
 
 # Generic refusal token the model may produce when the security block kicks in.
 _REFUSAL_TOKEN = "[REJECTED: prompt injection detected]"
+
+
+# --- AI-cliché (канцелярит) detection --------------------------------------
+# Stock phrases that mark a letter as machine-written boilerplate. Mirrors the
+# banned list in the system prompts; the validator is the enforcement layer.
+# One hit is tolerated (borderline phrases happen in honest prose), two or
+# more distinct patterns reject the letter through the same retry path.
+_AI_CLICHES_RU = [
+    r"\bуникальн\w+ возможност\w+\b",
+    r"\bидеальн\w+ (подхо\w+|кандидат\w*)\b",
+    r"\bбогат\w+ опыт\w*\b",
+    r"\bобширн\w+ опыт\w*\b",
+    r"\bширок\w+ спектр\w*\b",
+    r"\bглубок\w+ понимани\w+\b",
+    r"\bмо\w+ страст\w+\b",
+    r"\bрезонир\w+\b",
+    r"\bпозвольте мне\b",
+    r"\bне могу не отметить\b",
+    r"\bхотел\w* бы (подчеркнуть|отметить)\b",
+    r"\b(стоит|важно) отметить\b",
+    r"\bвнести вклад в развитие\b",
+    r"\bстать частью (вашей )?команды\b",
+    r"\bкарьерн\w+ цел\w+\b",
+    r"\bв современном мире\b",
+    r"\bв эпоху\b",
+    r"\bданн\w+ (ваканси\w+|позици\w+|должност\w+)\b",
+    r"\bосуществля\w+\b",
+    r"\bпосредством\b",
+    r"\bналичие опыта\b",
+    r"\bвысокомотивирован\w+\b",
+    r"\bкомандн\w+ игрок\w*\b",
+    r"\bстрессоустойчив\w+\b",
+    r"\bбыстрообучаем\w+\b",
+    r"\bнацелен\w* на результат\b",
+]
+_AI_CLICHES_EN = [
+    r"\bexcited to apply\b",
+    r"\bthrilled\b",
+    r"\bpassionate about\b",
+    r"\baligns? perfectly\b",
+    r"\bperfectly aligns?\b",
+    r"\bproven track record\b",
+    r"\bwealth of experience\b",
+    r"\bextensive experience\b",
+    r"\bunique opportunity\b",
+    r"\bdelve\b",
+    r"\bleverage my\b",
+    r"\bhoned my skills\b",
+    r"\bseamlessly\b",
+    r"\bdynamic environment\b",
+    r"\bfast-paced world\b",
+    r"\bwould welcome the opportunity\b",
+    r"\bideal candidate\b",
+    r"\bhighly motivated\b",
+    r"\bteam player\b",
+    r"\bfast learner\b",
+    r"\bresults?-(oriented|driven)\b",
+]
+_AI_CLICHE_MAX_HITS = 1  # 2+ distinct patterns → reject
+
+
+def _ai_cliche_reason(text: str, lang: str) -> str | None:
+    """Return a short tag if the letter reads as AI boilerplate, else None."""
+    patterns = _AI_CLICHES_EN if lang == "en" else _AI_CLICHES_RU
+    text_lc = text.lower()
+    matched = [p for p in patterns if re.search(p, text_lc)]
+    if len(matched) > _AI_CLICHE_MAX_HITS:
+        return f"{len(matched)}_hits"
+    return None
 
 
 # --- Keyword-stuffing detection -------------------------------------------
@@ -360,8 +440,8 @@ def _validate_letter(
     expected_screening_count: int = 0,
     key_skills: list[str] | None = None,
 ) -> tuple[bool, str | None]:
-    """Sanity-check the generated cover letter for prompt-injection symptoms
-    and keyword stuffing.
+    """Sanity-check the generated cover letter for prompt-injection symptoms,
+    keyword stuffing and AI-boilerplate clichés.
 
     Returns (ok, reason). reason is None on success, a short tag string otherwise.
     """
@@ -385,6 +465,9 @@ def _validate_letter(
     stuffing = _keyword_stuffing_reason(text, key_skills, expected_screening_count)
     if stuffing:
         return False, f"keyword_stuffing:{stuffing}"
+    cliche = _ai_cliche_reason(text, lang)
+    if cliche:
+        return False, f"ai_cliche:{cliche}"
     return True, None
 
 
@@ -507,8 +590,9 @@ async def generate_cover_letter(
     1. Sanitize untrusted text (drop angle brackets, control chars, collapse spam punctuation).
     2. Wrap untrusted text in <vacancy_data>…</vacancy_data> fence.
     3. System prompt is prefixed with an explicit security block telling the model to treat fenced text as DATA.
-    4. Output is validated for known injection footprints and keyword stuffing;
-       failure raises CoverLetterRejectedError after `max_retries` attempts.
+    4. Output is validated for known injection footprints, keyword stuffing and
+       AI-boilerplate clichés; failure raises CoverLetterRejectedError after
+       `max_retries` attempts.
     """
     clean_desc = _clean_html(description) if description else (
         "No description provided" if _detect_language(title) == "en" else "Описание не указано"
