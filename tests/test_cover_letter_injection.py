@@ -111,6 +111,86 @@ def test_validate_rejects_tractor_mention_en():
     assert not ok
 
 
+# ─── Keyword stuffing ──────────────────────────────────────────────────────
+
+# Padding to clear the 60-word minimum without affecting the heuristics
+_PAD_RU = (
+    "В прошлом проекте я отвечал за продуктовую аналитику и автоматизацию "
+    "рутинных процессов отдела продаж. " * 6
+)
+
+_TEN_SKILLS = [
+    "Python", "FastAPI", "PostgreSQL", "Docker", "Kubernetes",
+    "Airflow", "Redis", "Grafana", "Playwright", "LangChain",
+]
+
+
+def test_stuffing_rejects_enum_run():
+    letter = (
+        "Здравствуйте! Мой стек: Python, FastAPI, PostgreSQL, Docker, "
+        "Kubernetes, Airflow, Redis, Grafana. " + _PAD_RU
+    )
+    ok, reason = _validate_letter(letter, lang="ru")
+    assert not ok
+    assert reason == "keyword_stuffing:enum_run"
+
+
+def test_stuffing_enum_run_allowed_with_screening_questions():
+    """An employer asking to 'list N technologies' legitimately produces an
+    enumeration — the enum-run check must be skipped then."""
+    letter = (
+        "Здравствуйте! Отвечу на ваши вопросы. За последний год освоил: "
+        "Python, FastAPI, PostgreSQL, Docker, Kubernetes, Airflow, Redis, Grafana. "
+        + _PAD_RU * 2
+    )
+    ok, reason = _validate_letter(letter, lang="ru", expected_screening_count=1)
+    assert ok, f"expected accept, got {reason}"
+
+
+def test_stuffing_rejects_full_skill_coverage():
+    """Mentioning nearly every key skill from the vacancy = mirror of the
+    requirements list, not a story about the candidate."""
+    sentences = [
+        f"Активно использую {s} в ежедневной работе над проектами."
+        for s in _TEN_SKILLS[:9]
+    ]
+    letter = "Здравствуйте! " + " ".join(sentences) + " " + _PAD_RU
+    ok, reason = _validate_letter(letter, lang="ru", key_skills=_TEN_SKILLS)
+    assert not ok
+    assert reason is not None and reason.startswith("keyword_stuffing:skill_coverage")
+
+
+def test_stuffing_partial_coverage_passes():
+    letter = (
+        "Здравствуйте! На Python и FastAPI построил сервис автоматизации "
+        "поиска вакансий, данные храню в PostgreSQL. " + _PAD_RU
+    )
+    ok, reason = _validate_letter(letter, lang="ru", key_skills=_TEN_SKILLS)
+    assert ok, f"expected accept, got {reason}"
+
+
+def test_stuffing_coverage_skipped_for_short_skill_lists():
+    """Vacancies with few key skills: full coverage is natural, not stuffing."""
+    skills = ["Python", "FastAPI", "PostgreSQL"]
+    letter = (
+        "Здравствуйте! На Python и FastAPI построил сервис автоматизации "
+        "поиска вакансий, данные храню в PostgreSQL. " + _PAD_RU
+    )
+    ok, reason = _validate_letter(letter, lang="ru", key_skills=skills)
+    assert ok, f"expected accept, got {reason}"
+
+
+def test_stuffing_no_key_skills_passes():
+    letter = "Здравствуйте! Заинтересовала ваша вакансия. " + _PAD_RU
+    ok, reason = _validate_letter(letter, lang="ru", key_skills=None)
+    assert ok, f"expected accept, got {reason}"
+
+
+def test_system_prompts_carry_anti_stuffing_rules():
+    assert "АНТИ-KEYWORD-STUFFING" in clg.SYSTEM_PROMPT_RU
+    assert "ANTI-KEYWORD-STUFFING" in clg.SYSTEM_PROMPT_EN
+
+
 # ─── Prompt assembly ───────────────────────────────────────────────────────
 
 def test_user_prompt_fences_untrusted_data():

@@ -44,7 +44,7 @@ SYSTEM_PROMPT_RU = SECURITY_BLOCK_RU + """Ты пишешь сопроводит
    - "Добрый день, коллеги!"
    - "Приветствую!"
 2. ПРИЧИНА ИНТЕРЕСА — 1-2 предложения, почему именно эта вакансия привлекла. Будь конкретен: упомяни название компании, специфику задач или стека. НЕ пиши общие фразы типа "заинтересовала ваша вакансия".
-3. РЕЛЕВАНТНЫЙ ОПЫТ — 2-3 конкретных проекта или навыка из резюме, которые напрямую отвечают требованиям. Упомяни конкретные технологии из вакансии.
+3. РЕЛЕВАНТНЫЙ ОПЫТ — 2-3 конкретных проекта или навыка из резюме, которые напрямую отвечают требованиям. Технологии называй только те, с которыми кандидат реально работал (из резюме), и каждую — в связке с задачей и результатом.
 4. ЗАВЕРШЕНИЕ — короткое, деловое: готовность обсудить детали, предложить созвон.
 
 Правила тона:
@@ -57,6 +57,13 @@ SYSTEM_PROMPT_RU = SECURITY_BLOCK_RU + """Ты пишешь сопроводит
 - Кандидат открыт к full-time и part-time/проектной работе
 - Если вакансия на подработку — подчеркни гибкость графика
 - Если вакансия на full-time — пиши как обычно, не упоминай подработку
+
+АНТИ-KEYWORD-STUFFING — письмо НЕ должно выглядеть как подгонка под фильтры:
+- НЕ пересказывай список требований вакансии и НЕ вставляй в письмо перечни ключевых слов из неё
+- НЕ перечисляй больше 3 технологий подряд через запятую. Каждая названная технология — в связке с конкретным проектом или результатом («на X построил Y, что дало Z»)
+- Из стека вакансии выбери 2-3 направления, где у кандидата самый сильный опыт, — остальные требования просто не упоминай
+- НЕ копируй формулировки из описания вакансии дословно — перефразируй своими словами
+- Проверка: если убрать из письма названия технологий, оно должно остаться осмысленным рассказом об опыте, а не пустой рамкой вокруг ключевых слов
 
 NDA-ограничения — СТРОГО СОБЛЮДАЙ:
 - НИКОГДА не называй конкретных заказчиков по имени (a major international client, и т.д.)
@@ -109,7 +116,7 @@ Letter structure:
    - "Hi there!"
    - "Good day!"
 2. REASON FOR INTEREST — 1-2 sentences on why this specific role is appealing. Be specific: mention the company name, specific tasks or tech stack. NO generic phrases like "I'm interested in your vacancy".
-3. RELEVANT EXPERIENCE — 2-3 specific projects or skills from the resume that directly match the requirements. Mention specific technologies from the job posting.
+3. RELEVANT EXPERIENCE — 2-3 specific projects or skills from the resume that directly match the requirements. Name only technologies the candidate actually used (from the resume), each tied to a task and an outcome.
 4. CLOSING — short, professional: readiness to discuss details, suggest a call.
 
 Tone rules:
@@ -122,6 +129,13 @@ Tone rules:
 - Candidate is open to full-time and part-time/contract work
 - For part-time roles — emphasize schedule flexibility
 - For full-time roles — write normally, don't mention part-time
+
+ANTI-KEYWORD-STUFFING — the letter must NOT read as filter-gaming:
+- Do NOT retell the vacancy's requirements list or paste keyword runs from it
+- Do NOT chain more than 3 technologies in a row, comma-separated. Every named technology must be tied to a concrete project or outcome ("built Y with X, which delivered Z")
+- Pick the 2-3 areas of the vacancy stack where the candidate is strongest — simply omit the rest
+- Do NOT copy phrases from the description verbatim — paraphrase in your own words
+- Litmus test: strip the technology names from the letter — it must still read as a meaningful experience story, not an empty frame around keywords
 
 NDA restrictions — STRICTLY FOLLOW:
 - NEVER name specific clients (a major international client, etc.)
@@ -215,6 +229,41 @@ _INJECTION_FOOTPRINTS_EN = [
 _REFUSAL_TOKEN = "[REJECTED: prompt injection detected]"
 
 
+# --- Keyword-stuffing detection -------------------------------------------
+# A letter that parrots the vacancy's keyword list reads as filter-gaming and
+# hurts conversion. Two heuristics:
+# 1. Enumeration run — 7+ comma-separated short items (≤3 words each) in a row
+#    never appear in natural prose, only in pasted skill lists. Skipped when
+#    screening questions are present: an employer asking to "list N
+#    technologies" legitimately produces an enumeration.
+# 2. Skill coverage — verbatim mentions of nearly every key skill from the
+#    vacancy (6+ distinct, ≥75% of the list) mean the letter mirrors the
+#    requirements instead of telling the candidate's story.
+_STUFFING_ENUM_RUN = re.compile(
+    r"(?:[^\s,.;:!?()]+(?:[ \t][^\s,.;:!?()]+){0,2}\s*,\s*){6,}[^\s,.;:!?()]+"
+)
+_STUFFING_MIN_SKILLS = 6
+_STUFFING_COVERAGE = 0.75
+
+
+def _keyword_stuffing_reason(
+    text: str,
+    key_skills: list[str] | None,
+    expected_screening_count: int = 0,
+) -> str | None:
+    """Return a short tag if the letter looks keyword-stuffed, else None."""
+    if expected_screening_count == 0 and _STUFFING_ENUM_RUN.search(text):
+        return "enum_run"
+    if key_skills:
+        skills = {s.strip().lower() for s in key_skills if len(s.strip()) >= 3}
+        if len(skills) >= _STUFFING_MIN_SKILLS:
+            text_lc = text.lower()
+            hits = sum(1 for s in skills if s in text_lc)
+            if hits >= _STUFFING_MIN_SKILLS and hits / len(skills) >= _STUFFING_COVERAGE:
+                return f"skill_coverage:{hits}/{len(skills)}"
+    return None
+
+
 # Triggers signalling "what follows is a screening ask, answer it"
 _SCREENING_TRIGGERS_RU = [
     r"как откликнуться",
@@ -305,8 +354,14 @@ def _extract_screening_questions(description: str | None, lang: str = "ru") -> l
     return out[:10]
 
 
-def _validate_letter(text: str, lang: str, expected_screening_count: int = 0) -> tuple[bool, str | None]:
-    """Sanity-check the generated cover letter for prompt-injection symptoms.
+def _validate_letter(
+    text: str,
+    lang: str,
+    expected_screening_count: int = 0,
+    key_skills: list[str] | None = None,
+) -> tuple[bool, str | None]:
+    """Sanity-check the generated cover letter for prompt-injection symptoms
+    and keyword stuffing.
 
     Returns (ok, reason). reason is None on success, a short tag string otherwise.
     """
@@ -327,6 +382,9 @@ def _validate_letter(text: str, lang: str, expected_screening_count: int = 0) ->
     for pattern in footprints:
         if re.search(pattern, text_lc):
             return False, f"injection_footprint:{pattern}"
+    stuffing = _keyword_stuffing_reason(text, key_skills, expected_screening_count)
+    if stuffing:
+        return False, f"keyword_stuffing:{stuffing}"
     return True, None
 
 
@@ -449,8 +507,8 @@ async def generate_cover_letter(
     1. Sanitize untrusted text (drop angle brackets, control chars, collapse spam punctuation).
     2. Wrap untrusted text in <vacancy_data>…</vacancy_data> fence.
     3. System prompt is prefixed with an explicit security block telling the model to treat fenced text as DATA.
-    4. Output is validated for known injection footprints; failure raises CoverLetterRejectedError
-       after `max_retries` attempts.
+    4. Output is validated for known injection footprints and keyword stuffing;
+       failure raises CoverLetterRejectedError after `max_retries` attempts.
     """
     clean_desc = _clean_html(description) if description else (
         "No description provided" if _detect_language(title) == "en" else "Описание не указано"
@@ -493,7 +551,10 @@ async def generate_cover_letter(
             raise
 
         ok, reason = _validate_letter(
-            response.text, lang, expected_screening_count=len(screening_questions)
+            response.text,
+            lang,
+            expected_screening_count=len(screening_questions),
+            key_skills=key_skills,
         )
         if ok:
             if attempt > 0:
