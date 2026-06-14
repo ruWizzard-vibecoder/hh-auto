@@ -11,7 +11,11 @@ asyncpg>=0.30.0
 alembic>=1.14.0
 
 # hh.ru API
-httpx>=0.28.0
+# [socks] extra pulls in socksio — REQUIRED: Gemini scoring + cover-letter
+# generation reach the API through socks5://ssh-proxy:10808 (see ai_client.py).
+# Without it httpx raises "Using SOCKS proxy, but the 'socksio' package is not
+# installed" and the whole AI pipeline silently fails.
+httpx[socks]>=0.28.0
 tenacity>=9.0.0
 
 # AI via OpenRouter (OpenAI-compatible API)
@@ -22,6 +26,9 @@ apscheduler>=3.11.0
 
 # Telegram
 aiogram>=3.15.0
+# aiogram reaches Telegram through socks5://ssh-proxy:10808 (telegram_bot.py);
+# AiohttpSession(proxy=...) needs aiohttp-socks or it raises at session init.
+aiohttp-socks>=0.9.0
 
 # Browser automation (fallback)
 playwright>=1.49.0
