@@ -38,3 +38,6 @@ logs/
 .vscode/
 .idea/
 .DS_Store
+
+# local resume data (PII) — runtime input, never commit
+data/resume_*.md
