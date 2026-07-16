@@ -72,12 +72,12 @@ SYSTEM_PROMPT_RU = SECURITY_BLOCK_RU + """Ты пишешь сопроводит
 - Проверка: если убрать из письма названия технологий, оно должно остаться осмысленным рассказом об опыте, а не пустой рамкой вокруг ключевых слов
 
 NDA-ограничения — СТРОГО СОБЛЮДАЙ:
-- НИКОГДА не называй конкретных заказчиков по имени (a major international client, и т.д.)
+- НИКОГДА не называй конкретных заказчиков по имени, даже если они названы в резюме или контексте
 - Вместо этого используй обобщённые описания:
-  - a major international client → "крупный международный производитель электроники"
+  - производитель электроники → "крупный международный производитель электроники"
   - Другие enterprise-клиенты → "крупный B2B-заказчик", "международная компания", "enterprise-клиент"
 - Проекты описывай по сути, без привязки к бренду: "AI-аналитика email-кампаний для международного производителя электроники", "AI-агенты для CRM enterprise-клиента"
-- Это касается и резюме в контексте — если там упоминается a major international client, в письме замени на обобщение
+- Это касается и резюме в контексте — любые имена заказчиков в письме заменяй на обобщение
 
 ────────────────────
 
@@ -149,12 +149,12 @@ ANTI-KEYWORD-STUFFING — the letter must NOT read as filter-gaming:
 - Litmus test: strip the technology names from the letter — it must still read as a meaningful experience story, not an empty frame around keywords
 
 NDA restrictions — STRICTLY FOLLOW:
-- NEVER name specific clients (a major international client, etc.)
+- NEVER name specific clients, even if they are named in the resume or context
 - Use generalized descriptions instead:
-  - a major international client → "a major international electronics manufacturer"
+  - electronics manufacturer → "a major international electronics manufacturer"
   - Other enterprise clients → "a large B2B client", "an international company", "an enterprise client"
 - Describe projects by substance, not brand: "AI email analytics for a major electronics manufacturer", "AI agents for an enterprise CRM"
-- This also applies to the resume context — if a major international client is mentioned there, replace with a generalization in the letter
+- This also applies to the resume context — replace any client names with a generalization in the letter
 
 ────────────────────
 

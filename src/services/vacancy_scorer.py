@@ -301,7 +301,7 @@ Return ONLY valid JSON (no markdown):
 IMPORTANT CONTEXT:
 - Candidate is open to BOTH full-time and part-time/project work
 - Prefers remote work or hybrid in Moscow/Saint Petersburg, but considers other formats
-- Has enterprise experience (a major international client, B2B platforms) AND personal projects (18+ total)
+- Has enterprise experience (major international clients, B2B platforms) AND personal projects (18+ total)
 - Target roles by priority:
   Tier 1 (best fit): AI/Automation Engineer, AI Integrator, Vibe Coder, AI Solutions Engineer
   Tier 2 (strong): AI Product Engineer, LLM Engineer, Full-Stack AI Developer, No-code/Low-code Developer
