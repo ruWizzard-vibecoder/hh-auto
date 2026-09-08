@@ -1,5 +1,10 @@
 # Web framework
-fastapi>=0.115.0
+# NB: starlette >=0.29 requires TemplateResponse(request, name, context) —
+# the legacy (name, context) form was removed and fails at runtime with
+# "TypeError: unhashable type: 'dict'" (see src/api/dashboard.py).
+# Upper bound keeps a starlette 2.x rebuild from breaking the UI again.
+fastapi>=0.137.0
+starlette>=1.0,<2
 uvicorn[standard]>=0.32.0
 jinja2>=3.1.0
 python-multipart>=0.0.17

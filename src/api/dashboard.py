@@ -84,7 +84,7 @@ async def dashboard(request: Request, db: AsyncSession = Depends(get_db)):
         "responded": responded,
     }
 
-    return t.TemplateResponse("dashboard.html", {
+    return t.TemplateResponse(request, "dashboard.html", {
         "request": request,
         "stats": stats,
         "pending_count": pending_letters,
@@ -161,7 +161,7 @@ async def cover_letters_page(
 
     resume_names = await _get_resume_names(db)
 
-    return t.TemplateResponse("cover_letters.html", {
+    return t.TemplateResponse(request, "cover_letters.html", {
         "request": request,
         "letters": letters,
         "counts": counts,
@@ -239,7 +239,7 @@ async def vacancies_page(
 
     resume_names = await _get_resume_names(db)
 
-    return t.TemplateResponse("vacancies.html", {
+    return t.TemplateResponse(request, "vacancies.html", {
         "request": request,
         "vacancies": vacancies,
         "total": total,
@@ -287,7 +287,7 @@ async def applications_page(
 
     resume_names = await _get_resume_names(db)
 
-    return t.TemplateResponse("applications.html", {
+    return t.TemplateResponse(request, "applications.html", {
         "request": request,
         "applications": applications,
         "total": total,
@@ -319,7 +319,7 @@ async def settings_page(request: Request, db: AsyncSession = Depends(get_db)):
         (await db.execute(select(Resume).order_by(Resume.rotation_priority))).scalars().all()
     )
 
-    return t.TemplateResponse("settings.html", {
+    return t.TemplateResponse(request, "settings.html", {
         "request": request,
         "is_authenticated": auth_ok,
         "profiles": profiles,
@@ -440,7 +440,7 @@ async def analytics_page(request: Request, db: AsyncSession = Depends(get_db)):
 
     max_daily = max((d["sent"] for d in daily_stats), default=1) if daily_stats else 1
 
-    return t.TemplateResponse("analytics.html", {
+    return t.TemplateResponse(request, "analytics.html", {
         "request": request,
         "stats": stats,
         "daily_stats": daily_stats,
@@ -464,7 +464,7 @@ async def summaries_page(request: Request, db: AsyncSession = Depends(get_db)):
         select(func.count(CoverLetter.id)).where(CoverLetter.status == "pending")
     )).scalar_one()
 
-    return t.TemplateResponse("summaries.html", {
+    return t.TemplateResponse(request, "summaries.html", {
         "request": request,
         "summaries": summaries,
         "pending_count": pending_count,
