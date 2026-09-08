@@ -659,7 +659,7 @@ async def generate_cover_letter(
                 prompt=user_prompt,
                 system=system_prompt,
                 model=settings.ai_model,
-                max_tokens=4096,
+                max_tokens=16000,
             )
         except Exception as e:
             logger.error(f"Cover letter LLM call failed: {e}")

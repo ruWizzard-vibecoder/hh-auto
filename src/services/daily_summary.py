@@ -231,7 +231,7 @@ async def generate_daily_summary(
             prompt=user_prompt,
             system=SUMMARY_SYSTEM_PROMPT,
             model=settings.ai_model,
-            max_tokens=4000,
+            max_tokens=16000,
         )
 
         text = response.text

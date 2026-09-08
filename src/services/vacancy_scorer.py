@@ -318,7 +318,7 @@ Scoring guidelines:
         response = await ai_complete(
             prompt=prompt,
             model=settings.scoring_model,
-            max_tokens=4096,
+            max_tokens=16000,
         )
 
         text = response.text
