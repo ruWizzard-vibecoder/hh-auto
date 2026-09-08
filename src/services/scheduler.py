@@ -1,6 +1,7 @@
 """APScheduler job orchestration."""
 
 import logging
+from datetime import datetime, timezone
 
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from apscheduler.triggers.cron import CronTrigger
@@ -142,11 +143,19 @@ async def _run_daily_summary():
 
 def setup_scheduler():
     """Register all scheduled jobs."""
+    # next_run_time=now: an IntervalTrigger otherwise counts from process start,
+    # so every restart pushes the next search a full interval away — a reboot
+    # could leave the pipeline idle for search_interval_hours with no new vacancies.
+    # misfire_grace_time: the default is 1s, and the scheduler needs a few seconds
+    # to come up — without the grace window this very run is skipped as a misfire
+    # and the fix above silently does nothing.
     scheduler.add_job(
         _run_search_cycle,
         IntervalTrigger(hours=settings.search_interval_hours),
         id="search_cycle",
         replace_existing=True,
+        next_run_time=datetime.now(timezone.utc),
+        misfire_grace_time=300,
     )
     scheduler.add_job(
         _run_apply_cycle,
