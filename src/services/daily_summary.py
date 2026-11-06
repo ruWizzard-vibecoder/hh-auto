@@ -251,10 +251,10 @@ async def generate_daily_summary(
             letters_approved=letters_approved,
             applications_sent=applications_sent,
             responses_received=responses_received,
-            summary_text=data.get("summary_text", ""),
-            top_vacancies=data.get("top_vacancies"),
-            interview_prep=data.get("interview_prep"),
-            insights=data.get("insights"),
+            summary_text=_as_text(data.get("summary_text")),
+            top_vacancies=_as_json_list(data.get("top_vacancies")),
+            interview_prep=_as_json_list(data.get("interview_prep")),
+            insights=_as_text(data.get("insights")),
             avg_relevance_score=avg_score,
             model_used=response.model,
         )
@@ -270,6 +270,27 @@ async def generate_daily_summary(
             logger.error(f"Daily summary unavailable — AI quota exhausted: {e}")
         else:
             logger.error(f"Daily summary generation failed: {e}")
+        # If the failure happened at flush, the session is poisoned and the fallback
+        # insert below would fail too — which is how one day in the last 30 ended up
+        # with no row at all, not even a stub. Clear the transaction first.
+        try:
+            await db.rollback()
+        except Exception as rollback_error:  # noqa: BLE001
+            logger.error(f"Rollback before fallback summary failed: {rollback_error}")
+
+        # The rollback also undid the delete of an older stub, if there was one.
+        # summary_date is unique, so inserting a second stub would fail — and the
+        # row that is already there says exactly what this one would.
+        surviving = (await db.execute(
+            select(DailySummary).where(DailySummary.summary_date == target_date)
+        )).scalar_one_or_none()
+        if surviving is not None:
+            logger.info(
+                f"Keeping the existing stats-only summary for {target_date}; "
+                f"the next run will try again"
+            )
+            return surviving
+
         # Stats-only stub. It keeps model_used = NULL on purpose: that is what marks
         # it as "not a summary" for the regeneration check above, for the dashboard,
         # and for the Telegram message, which now says the analysis is missing
@@ -295,6 +316,48 @@ async def generate_daily_summary(
         db.add(summary)
         await db.commit()
         return summary
+
+
+def _as_text(value: object) -> str:
+    """Coerce a model-supplied field into the text its column expects.
+
+    The prompt asks for `insights` as a string, and the model usually complies —
+    but it sometimes answers with an object of named sections instead. Passed
+    straight to a Text column that raises asyncpg DataError
+    ("expected str, got dict"), which used to fail the whole insert: the day got
+    a stats-only stub, or — when the fallback insert hit the same poisoned
+    session — no row at all. Rendering the object is better than losing the day's
+    analysis over its shape.
+    """
+    if value is None:
+        return ""
+    if isinstance(value, str):
+        return value
+    if isinstance(value, dict):
+        parts = []
+        for key, item in value.items():
+            heading = str(key).replace("_", " ").strip().capitalize()
+            parts.append(f"**{heading}**\n\n{_as_text(item)}")
+        return "\n\n".join(parts)
+    if isinstance(value, (list, tuple)):
+        return "\n\n".join(_as_text(item) for item in value)
+    return str(value)
+
+
+def _as_json_list(value: object) -> list | None:
+    """Keep a JSONB list column a list, whatever shape the model sent."""
+    if value is None:
+        return None
+    if isinstance(value, list):
+        return value
+    if isinstance(value, dict):
+        # A single object where a list was asked for, or {"items": [...]}.
+        for key in ("items", "vacancies", "list", "data"):
+            inner = value.get(key)
+            if isinstance(inner, list):
+                return inner
+        return [value]
+    return [{"value": str(value)}]
 
 
 def _fallback_summary(

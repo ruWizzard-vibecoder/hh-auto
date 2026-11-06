@@ -35,7 +35,11 @@ from src.services.ai_client import (
     _strip_code_fence,
     ai_complete_json,
 )
-from src.services.daily_summary import format_summary_for_telegram
+from src.services.daily_summary import (
+    _as_json_list,
+    _as_text,
+    format_summary_for_telegram,
+)
 from src.services.vacancy_scorer import ScoringFailed, ai_score
 
 GOOD_SCORE_JSON = json.dumps(
@@ -313,3 +317,47 @@ def test_a_real_summary_carries_no_warning():
     """The other direction: don't cry failure over a summary that worked."""
     text = format_summary_for_telegram(_summary(model_used="gemini-2.5-flash"))
     assert "Разбора нет" not in text
+
+
+# ─── The shape of a reply must not cost the day's analysis ─────────────────
+#
+# Found by running the new code against the real database: the model answered
+# `insights` with an object of named sections instead of a string. asyncpg
+# rejected the Text column ("expected str, got dict"), the whole insert failed,
+# and the fallback insert failed too on the poisoned session — one day in the
+# last 30 has no summary row at all because of this.
+
+def test_insights_as_an_object_is_rendered_not_dropped():
+    rendered = _as_text({
+        "trends": "Рост спроса на LLM",
+        "recommendation_for_candidate": "Подчёркивать RAG",
+    })
+    assert "Рост спроса на LLM" in rendered
+    assert "Подчёркивать RAG" in rendered
+    assert isinstance(rendered, str)
+
+
+@pytest.mark.parametrize("value,expected", [
+    ("просто текст", "просто текст"),
+    (None, ""),
+    (["первое", "второе"], "первое\n\nвторое"),
+    (42, "42"),
+])
+def test_as_text_passes_plain_values_through(value, expected):
+    assert _as_text(value) == expected
+
+
+def test_nested_objects_are_flattened_to_text():
+    rendered = _as_text({"outer": {"inner": "значение"}})
+    assert "значение" in rendered
+    assert isinstance(rendered, str)
+
+
+@pytest.mark.parametrize("value,expected", [
+    (None, None),
+    ([{"title": "a"}], [{"title": "a"}]),
+    ({"items": [{"title": "a"}]}, [{"title": "a"}]),
+    ({"title": "одна вакансия"}, [{"title": "одна вакансия"}]),
+])
+def test_a_jsonb_list_column_always_gets_a_list(value, expected):
+    assert _as_json_list(value) == expected
