@@ -1,15 +1,30 @@
 """Two-tier vacancy scoring: fast rule-based + AI-powered deep scoring."""
 
-import json
 import logging
 import re
 from dataclasses import dataclass, field
 from html import unescape
 
 from src.config import settings
-from src.services.ai_client import ai_complete
+from src.services.ai_client import (
+    AIQuotaExhausted,
+    AIResponseInvalid,
+    ai_complete_json,
+)
 
 logger = logging.getLogger("hh-auto.scorer")
+
+
+class ScoringFailed(Exception):
+    """The vacancy could not be scored.
+
+    Raised rather than returned so that no caller can mistake it for a verdict.
+    The previous version answered a failure with `ScoringResult(score=0.5, ...)`:
+    indistinguishable from a real middling score, it marked the vacancy scored for
+    good. 341 vacancies accumulated that way, 63 of them during a two-day billing
+    outage in Nov 2026, and because auto-generation needs 0.7 none of them ever
+    reached the review queue — while every cycle reported success.
+    """
 
 # Skills from Alexey's resume, grouped by relevance weight
 AI_SKILLS = {
@@ -271,9 +286,13 @@ async def ai_score(
     key_skills: list[str] | None,
     resume_text: str,
 ) -> ScoringResult:
-    """
-    AI-powered deep scoring using Claude Haiku for cost efficiency.
-    Analyzes full vacancy description against resume.
+    """Deep scoring of one vacancy against the resume.
+
+    Raises:
+        ScoringFailed: the vacancy could not be scored — the caller must leave the
+            score unset and arrange a retry, never store a placeholder.
+        AIQuotaExhausted: the account is out of credits, so the whole cycle should
+            stop rather than walk the remaining vacancies into the same wall.
     """
     clean_desc = _clean_html(description) if description else "No description"
     skills_str = ", ".join(key_skills) if key_skills else "Not specified"
@@ -315,42 +334,31 @@ Scoring guidelines:
 - 0.0-0.2: No match"""
 
     try:
-        response = await ai_complete(
+        data, _response = await ai_complete_json(
             prompt=prompt,
             model=settings.scoring_model,
             max_tokens=16000,
+            attempts=3,
         )
-
-        text = response.text
-        # Try to extract JSON from response
-        if text.startswith("```"):
-            text = text.split("```")[1]
-            if text.startswith("json"):
-                text = text[4:]
-        # Fix truncated JSON: close open strings and braces
-        text = text.strip()
-        if not text.endswith("}"):
-            # Try to salvage truncated JSON
-            if '"score"' in text:
-                score_match = re.search(r'"score"\s*:\s*([\d.]+)', text)
-                if score_match:
-                    return ScoringResult(
-                        score=float(score_match.group(1)),
-                        reasoning="(truncated AI response)",
-                    )
-        data = json.loads(text)
-
-        return ScoringResult(
-            score=float(data.get("score", 0.0)),
-            reasoning=data.get("reasoning", ""),
-            matched_skills=data.get("matched_skills", []),
-            missing_skills=data.get("missing_skills", []),
-            recommended_emphasis=data.get("recommended_emphasis", ""),
-        )
-
+    except AIQuotaExhausted:
+        # Not this vacancy's problem — let it stop the cycle.
+        raise
+    except AIResponseInvalid as e:
+        raise ScoringFailed(str(e)) from e
     except Exception as e:
-        logger.error(f"AI scoring failed: {e}")
-        return ScoringResult(
-            score=0.5,
-            reasoning=f"AI scoring failed: {str(e)[:100]}",
-        )
+        raise ScoringFailed(f"{type(e).__name__}: {str(e)[:200]}") from e
+
+    # A reply without a usable score is a failed scoring, not a score of zero.
+    raw_score = data.get("score")
+    try:
+        score = float(raw_score)
+    except (TypeError, ValueError) as e:
+        raise ScoringFailed(f"no usable score in reply (score={raw_score!r}): {e}") from e
+
+    return ScoringResult(
+        score=max(0.0, min(score, 1.0)),
+        reasoning=data.get("reasoning", ""),
+        matched_skills=data.get("matched_skills") or [],
+        missing_skills=data.get("missing_skills") or [],
+        recommended_emphasis=data.get("recommended_emphasis") or "",
+    )

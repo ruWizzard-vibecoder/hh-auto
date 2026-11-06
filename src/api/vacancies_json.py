@@ -140,20 +140,58 @@ async def generate_letter(vacancy_id: int, db: AsyncSession = Depends(get_db)):
     if not vacancy:
         return JSONResponse({"error": "not_found"}, status_code=404)
 
+    from src.services.ai_client import AIQuotaExhausted
     from src.services.cover_letter_generator import (
         CoverLetterRejectedError,
         generate_cover_letter,
     )
     from src.services.pipeline import _load_resume_text
-    from src.services.vacancy_scorer import ScoringResult
+    from src.services.vacancy_scorer import ScoringFailed, ScoringResult, ai_score
 
     resume_text = _load_resume_text()
-    scoring = ScoringResult(
-        score=vacancy.relevance_score or 0.5,
-        reasoning=vacancy.score_reasoning or "",
-        matched_skills=vacancy.matched_skills or [],
-        missing_skills=vacancy.missing_skills or [],
-    )
+
+    # An unscored vacancy used to be handed to the letter writer as 0.5 — a number
+    # nobody measured, shaping what the letter emphasises. Score it for real first.
+    if vacancy.relevance_score is None:
+        try:
+            scoring = await ai_score(
+                title=vacancy.title,
+                company_name=vacancy.company_name,
+                description=vacancy.description,
+                key_skills=vacancy.key_skills,
+                resume_text=resume_text,
+            )
+        except AIQuotaExhausted as exc:
+            return JSONResponse(
+                {
+                    "error": "ai_quota_exhausted",
+                    "detail": str(exc)[:300],
+                    "hint": "У модели закончились деньги — вакансия не оценена, письмо не сгенерировано.",
+                },
+                status_code=503,
+            )
+        except ScoringFailed as exc:
+            return JSONResponse(
+                {
+                    "error": "scoring_failed",
+                    "detail": str(exc)[:300],
+                    "hint": "Вакансию не удалось оценить. Письмо не сгенерировано — попробуйте ещё раз.",
+                },
+                status_code=502,
+            )
+        vacancy.relevance_score = scoring.score
+        vacancy.score_reasoning = scoring.reasoning
+        vacancy.matched_skills = scoring.matched_skills
+        vacancy.missing_skills = scoring.missing_skills
+        if vacancy.status == "score_failed":
+            vacancy.status = "scored"
+    else:
+        scoring = ScoringResult(
+            score=vacancy.relevance_score,
+            reasoning=vacancy.score_reasoning or "",
+            matched_skills=vacancy.matched_skills or [],
+            missing_skills=vacancy.missing_skills or [],
+        )
     try:
         draft = await generate_cover_letter(
             title=vacancy.title,

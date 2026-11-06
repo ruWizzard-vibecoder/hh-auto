@@ -40,6 +40,10 @@ class Vacancy(Base):
     recommended_resume_id: Mapped[str | None] = mapped_column(String(50))
 
     # Pipeline status: discovered / scored / queued / applied / skipped / blacklisted
+    #                  / score_failed / archived
+    # score_failed means the AI scoring call did not produce a verdict, so
+    # relevance_score stays NULL. The search cycle retries these rows before
+    # searching; nothing downstream may read them as judged.
     status: Mapped[str] = mapped_column(String(50), default="discovered", index=True)
     search_profile_id: Mapped[int | None] = mapped_column(Integer)
 

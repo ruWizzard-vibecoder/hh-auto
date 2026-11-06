@@ -9,7 +9,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
 from src.config import settings
-from src.services.ai_client import ai_complete
+from src.services.ai_client import AIQuotaExhausted, ai_complete_json
 from src.models.vacancy import Vacancy
 from src.models.application import Application
 from src.models.cover_letter import CoverLetter
@@ -58,13 +58,21 @@ async def generate_daily_summary(
     if target_date is None:
         target_date = date.today()
 
-    # Check if summary already exists
-    existing = await db.execute(
+    # A stats-only stub is not a summary, so it must not block a retry. The old
+    # check treated any row as done: one malformed reply at 22:00 locked the day
+    # into a stub for good, and 13 of the last 30 days were stubs nobody noticed.
+    existing_row = (await db.execute(
         select(DailySummary).where(DailySummary.summary_date == target_date)
-    )
-    if existing.scalar_one_or_none():
-        logger.info(f"Summary for {target_date} already exists, skipping")
-        return None
+    )).scalar_one_or_none()
+    if existing_row is not None:
+        if existing_row.model_used:
+            logger.info(f"Summary for {target_date} already exists, skipping")
+            return None
+        logger.info(
+            f"Summary for {target_date} is a stats-only stub (no model) — regenerating"
+        )
+        await db.delete(existing_row)
+        await db.flush()
 
     # --- Gather day's data ---
 
@@ -227,21 +235,13 @@ async def generate_daily_summary(
 }}"""
 
     try:
-        response = await ai_complete(
+        data, response = await ai_complete_json(
             prompt=user_prompt,
             system=SUMMARY_SYSTEM_PROMPT,
             model=settings.ai_model,
             max_tokens=16000,
+            attempts=3,
         )
-
-        text = response.text
-        # Parse JSON from response
-        if text.startswith("```"):
-            text = text.split("```")[1]
-            if text.startswith("json"):
-                text = text[4:]
-            text = text.strip()
-        data = json.loads(text)
 
         summary = DailySummary(
             summary_date=target_date,
@@ -265,8 +265,15 @@ async def generate_daily_summary(
         return summary
 
     except Exception as e:
-        logger.error(f"Daily summary generation failed: {e}")
-        # Save a fallback summary with just stats
+        if isinstance(e, AIQuotaExhausted):
+            # ai_client has already alerted; say plainly what the reader is getting.
+            logger.error(f"Daily summary unavailable — AI quota exhausted: {e}")
+        else:
+            logger.error(f"Daily summary generation failed: {e}")
+        # Stats-only stub. It keeps model_used = NULL on purpose: that is what marks
+        # it as "not a summary" for the regeneration check above, for the dashboard,
+        # and for the Telegram message, which now says the analysis is missing
+        # instead of looking like a short report.
         summary = DailySummary(
             summary_date=target_date,
             vacancies_discovered=vacancies_discovered,
@@ -322,10 +329,21 @@ def format_summary_for_telegram(summary: DailySummary) -> str:
     """Format summary for Telegram message (shorter, HTML)."""
     d = summary.summary_date.strftime("%d.%m.%Y")
 
+    # A message that arrives says nothing about whether it has anything in it.
+    # When model_used is empty the AI analysis did not happen, and for a week in
+    # Sep 2026 — then 13 days out of 30 this autumn — that stub went out looking
+    # like a short report. Say it on the first line instead.
+    header = f"<b>Daily Summary {d}</b>\n"
+    if not summary.model_used:
+        header += (
+            "⚠️ <b>Разбора нет</b> — модель не ответила, ниже только статистика.\n"
+        )
+    header += "\n"
+
     # Stats line
     stats = (
-        f"<b>Daily Summary {d}</b>\n\n"
-        f"Vacancies: {summary.vacancies_discovered} | "
+        header
+        + f"Vacancies: {summary.vacancies_discovered} | "
         f"Applications: {summary.applications_sent} | "
         f"Responses: {summary.responses_received}\n"
         f"Avg score: {summary.avg_relevance_score:.0%}\n\n"

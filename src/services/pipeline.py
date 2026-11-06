@@ -15,9 +15,15 @@ from src.models.search_profile import SearchProfile
 from src.models.resume import Resume
 from src.models.company_rule import CompanyRule
 from src.models.event_log import EventLog
+from src.services.ai_client import AIQuotaExhausted
 from src.services.hh_client import HHClient, VacancyShort, HHApiError
 from src.services.hh_browser import HHBrowser
-from src.services.vacancy_scorer import fast_score, ai_score
+from src.services.vacancy_scorer import (
+    ScoringFailed,
+    ScoringResult,
+    fast_score,
+    ai_score,
+)
 from src.services.cover_letter_generator import generate_cover_letter
 from src.services.resume_matcher import match_resume
 from src.services.telegram_bot import notifier
@@ -78,6 +84,23 @@ class Pipeline:
         total_new = 0
         total_scored = 0
         total_letters = 0
+        aborted_reason: str | None = None
+
+        # Vacancies whose scoring failed in an earlier cycle carry no score, so
+        # nothing downstream mistakes them for judged — but nothing revisits them
+        # either unless this runs first.
+        try:
+            total_rescored = await self._retry_failed_scores()
+        except AIQuotaExhausted as e:
+            logger.error(f"Search cycle aborted before search: AI quota exhausted ({e})")
+            await self._log_event(
+                "search_cycle_aborted", {"reason": "ai_quota_exhausted"}, error=str(e)
+            )
+            await self.db.commit()
+            return
+        except Exception as e:
+            logger.error(f"Retry of failed scores errored: {e}")
+            total_rescored = 0
 
         for profile in profiles:
             try:
@@ -85,6 +108,15 @@ class Pipeline:
                 total_new += new
                 total_scored += scored
                 total_letters += letters
+            except AIQuotaExhausted as e:
+                # Every remaining vacancy would hit the same wall and be billed for
+                # the attempt. Stop and leave them unscored for the next cycle.
+                aborted_reason = "ai_quota_exhausted"
+                logger.error(f"Search cycle aborted: AI quota exhausted ({e})")
+                await self._log_event(
+                    "search_cycle_aborted", {"reason": aborted_reason}, error=str(e)
+                )
+                break
             except Exception as e:
                 logger.error(f"Error processing profile '{profile.name}': {e}")
                 await self._log_event(
@@ -97,12 +129,15 @@ class Pipeline:
             "profiles": len(profiles),
             "new_vacancies": total_new,
             "scored": total_scored,
+            "rescored_after_failure": total_rescored,
             "letters_generated": total_letters,
+            "aborted": aborted_reason,
         })
         await self.db.commit()
         logger.info(
-            f"Search cycle complete: {total_new} new, {total_scored} scored, "
-            f"{total_letters} letters generated"
+            f"Search cycle {'ABORTED (' + aborted_reason + ')' if aborted_reason else 'complete'}: "
+            f"{total_new} new, {total_scored} scored, {total_rescored} re-scored after "
+            f"earlier failure, {total_letters} letters generated"
         )
 
         # Telegram notification
@@ -163,14 +198,25 @@ class Pipeline:
                 logger.warning(f"Failed to fetch vacancy {v.hh_id}: {e}")
                 continue
 
-            # AI score
-            ai_result = await ai_score(
-                title=full.title,
-                company_name=full.company_name,
-                description=full.description,
-                key_skills=full.key_skills,
-                resume_text=self.resume_text,
-            )
+            # AI score. A failure must not be written as a verdict: store the
+            # vacancy with no score and a status the next cycle picks up, so it
+            # gets judged later instead of being buried under a placeholder.
+            try:
+                ai_result = await ai_score(
+                    title=full.title,
+                    company_name=full.company_name,
+                    description=full.description,
+                    key_skills=full.key_skills,
+                    resume_text=self.resume_text,
+                )
+            except ScoringFailed as e:
+                logger.warning(f"Scoring failed for {v.hh_id}, queued for retry: {e}")
+                await self._save_vacancy(
+                    v, None, f"scoring pending: {str(e)[:200]}",
+                    "score_failed", profile.id,
+                    description=full.description,
+                )
+                continue
             scored_count += 1
 
             # Match best resume for this vacancy
@@ -193,41 +239,170 @@ class Pipeline:
             # Lower-scoring ones (between min_relevance_score and auto_generate_score)
             # are saved as "scored" and can have letters generated manually via UI
             if ai_result.score >= settings.auto_generate_score:
-                resume_id_for_letter = resume_match.resume_hh_id or profile.resume_id or ""
-                try:
-                    draft = await generate_cover_letter(
-                        title=full.title,
-                        company_name=full.company_name,
-                        description=full.description,
-                        key_skills=full.key_skills,
-                        resume_text=self.resume_text,
-                        scoring=ai_result,
-                    )
-                    self.db.add(CoverLetter(
-                        vacancy_id=db_vacancy.id,
-                        resume_id=resume_id_for_letter,
-                        generated_text=draft.text,
-                        generation_prompt=draft.prompt_used[:5000],
-                        model_used=draft.model,
-                        status="pending",
-                    ))
-                    db_vacancy.status = "queued"
+                if await self._generate_letter_for(
+                    db_vacancy,
+                    full,
+                    ai_result,
+                    resume_id_for_letter=resume_match.resume_hh_id or profile.resume_id or "",
+                ):
                     letters_count += 1
-                    await self.db.flush()
-
-                    # Notify about new match
-                    if notifier.is_configured:
-                        await notifier.notify_new_match(
-                            vacancy_title=full.title,
-                            company_name=full.company_name,
-                            score=ai_result.score,
-                            vacancy_url=v.url,
-                            letter_preview=draft.text,
-                        )
-                except Exception as e:
-                    logger.error(f"Cover letter generation failed for {v.hh_id}: {e}")
 
         return len(new_vacancies), scored_count, letters_count
+
+    async def _generate_letter_for(
+        self,
+        db_vacancy: Vacancy,
+        full,
+        ai_result: ScoringResult,
+        resume_id_for_letter: str = "",
+    ) -> bool:
+        """Draft a cover letter for a vacancy that cleared the auto-generate bar.
+
+        Shared by the search cycle and the retry pass, so a vacancy recovered after
+        a scoring failure gets exactly what a first-pass vacancy gets. Kept as one
+        copy on purpose: two paths with their own copy drift, and the way they drift
+        here is silent — a recovered 0.95 match sitting "scored" with no letter and
+        nothing scheduled to make one.
+
+        Returns True only when a new letter was stored.
+        """
+        existing = (await self.db.execute(
+            select(CoverLetter).where(CoverLetter.vacancy_id == db_vacancy.id)
+        )).scalars().first()
+        if existing:
+            db_vacancy.status = "queued"
+            return False
+
+        try:
+            draft = await generate_cover_letter(
+                title=full.title,
+                company_name=full.company_name,
+                description=full.description,
+                key_skills=full.key_skills,
+                resume_text=self.resume_text,
+                scoring=ai_result,
+            )
+        except AIQuotaExhausted:
+            # The score is already stored and real; only the letter is missing.
+            # Let the cycle stop rather than walk the rest into the same wall.
+            raise
+        except Exception as e:
+            logger.error(f"Cover letter generation failed for {db_vacancy.hh_id}: {e}")
+            return False
+
+        self.db.add(CoverLetter(
+            vacancy_id=db_vacancy.id,
+            resume_id=resume_id_for_letter,
+            generated_text=draft.text,
+            generation_prompt=draft.prompt_used[:5000],
+            model_used=draft.model,
+            status="pending",
+        ))
+        db_vacancy.status = "queued"
+        await self.db.flush()
+
+        if notifier.is_configured:
+            try:
+                await notifier.notify_new_match(
+                    vacancy_title=full.title,
+                    company_name=full.company_name,
+                    score=ai_result.score,
+                    vacancy_url=db_vacancy.url or full.url,
+                    letter_preview=draft.text,
+                )
+            except Exception as e:
+                logger.error(f"Match notification failed for {db_vacancy.hh_id}: {e}")
+        return True
+
+    async def _retry_failed_scores(self, limit: int = 50) -> int:
+        """Re-score vacancies whose scoring failed in an earlier cycle.
+
+        `score_failed` rows carry relevance_score = NULL, so nothing downstream
+        treats them as judged — which also means nothing picks them up on its own.
+        Without this pass a transient failure (a malformed reply, a depleted
+        balance) would hide a vacancy for good, exactly as 341 rows were hidden
+        before failures stopped being written as 0.5.
+        """
+        result = await self.db.execute(
+            select(Vacancy)
+            .where(Vacancy.status == "score_failed")
+            .order_by(Vacancy.discovered_at.desc())
+            .limit(limit)
+        )
+        pending = list(result.scalars().all())
+        if not pending:
+            return 0
+
+        logger.info(f"Retrying {len(pending)} vacancies whose scoring failed earlier")
+        recovered = 0
+        still_failing = 0
+
+        for vacancy in pending:
+            # A vacancy closed on hh.ru should not get a score and a letter nobody
+            # can send — archive it instead.
+            try:
+                full = await self.hh.get_vacancy(vacancy.hh_id)
+            except HHApiError as e:
+                if e.status_code in (403, 404):
+                    vacancy.status = "archived"
+                    logger.info(f"Vacancy {vacancy.hh_id} gone from hh ({e.status_code}), archived")
+                else:
+                    logger.warning(f"Could not re-fetch {vacancy.hh_id}: {e}")
+                continue
+            except Exception as e:
+                logger.warning(f"Could not re-fetch {vacancy.hh_id}: {e}")
+                continue
+
+            if full.archived:
+                vacancy.status = "archived"
+                logger.info(f"Vacancy {vacancy.hh_id} archived on hh, skipping")
+                continue
+
+            try:
+                ai_result = await ai_score(
+                    title=full.title,
+                    company_name=full.company_name,
+                    description=full.description,
+                    key_skills=full.key_skills,
+                    resume_text=self.resume_text,
+                )
+            except ScoringFailed as e:
+                # Leave the row as it is; the next cycle tries again.
+                still_failing += 1
+                logger.warning(f"Retry still failed for {vacancy.hh_id}: {e}")
+                continue
+
+            vacancy.relevance_score = ai_result.score
+            vacancy.score_reasoning = ai_result.reasoning
+            vacancy.matched_skills = ai_result.matched_skills
+            vacancy.missing_skills = ai_result.missing_skills
+            if full.description:
+                vacancy.description = full.description
+            vacancy.status = "scored"
+            recovered += 1
+
+            resume_match = await match_resume(
+                self.db,
+                vacancy_title=full.title,
+                vacancy_skills=full.key_skills,
+                vacancy_description=full.description,
+            )
+            vacancy.recommended_resume_id = resume_match.resume_hh_id or None
+
+            if ai_result.score >= settings.auto_generate_score:
+                await self._generate_letter_for(
+                    vacancy,
+                    full,
+                    ai_result,
+                    resume_id_for_letter=resume_match.resume_hh_id or "",
+                )
+
+        await self.db.commit()
+        logger.info(
+            f"Re-scored {recovered} of {len(pending)} previously failed vacancies "
+            f"({still_failing} still failing)"
+        )
+        return recovered
 
     # --- Apply Cycle (browser) ---
 
@@ -636,13 +811,24 @@ class Pipeline:
                 logger.warning(f"Failed to fetch full {v.hh_id}: {e}")
                 continue
 
-            ai_result = await ai_score(
-                title=full.title,
-                company_name=full.company_name,
-                description=full.description,
-                key_skills=full.key_skills,
-                resume_text=self.resume_text,
-            )
+            # Same rule as the search cycle: a failure is stored as "not scored
+            # yet", never as a score, so the retry pass can revisit it.
+            try:
+                ai_result = await ai_score(
+                    title=full.title,
+                    company_name=full.company_name,
+                    description=full.description,
+                    key_skills=full.key_skills,
+                    resume_text=self.resume_text,
+                )
+            except ScoringFailed as e:
+                logger.warning(f"Scoring failed for {v.hh_id}, queued for retry: {e}")
+                await self._save_vacancy(
+                    v, None, f"scoring pending: {str(e)[:200]}",
+                    "score_failed", fallback_profile_id,
+                    description=full.description,
+                )
+                continue
             scored_count += 1
 
             resume_match = await match_resume(
@@ -661,38 +847,13 @@ class Pipeline:
             db_vacancy.recommended_resume_id = resume_match.resume_hh_id or None
 
             if ai_result.score >= settings.auto_generate_score:
-                resume_id_for_letter = resume_match.resume_hh_id or ""
-                try:
-                    draft = await generate_cover_letter(
-                        title=full.title,
-                        company_name=full.company_name,
-                        description=full.description,
-                        key_skills=full.key_skills,
-                        resume_text=self.resume_text,
-                        scoring=ai_result,
-                    )
-                    self.db.add(CoverLetter(
-                        vacancy_id=db_vacancy.id,
-                        resume_id=resume_id_for_letter,
-                        generated_text=draft.text,
-                        generation_prompt=draft.prompt_used[:5000],
-                        model_used=draft.model,
-                        status="pending",
-                    ))
-                    db_vacancy.status = "queued"
+                if await self._generate_letter_for(
+                    db_vacancy,
+                    full,
+                    ai_result,
+                    resume_id_for_letter=resume_match.resume_hh_id or "",
+                ):
                     letters_count += 1
-                    await self.db.flush()
-
-                    if notifier.is_configured:
-                        await notifier.notify_new_match(
-                            vacancy_title=full.title,
-                            company_name=full.company_name,
-                            score=ai_result.score,
-                            vacancy_url=v.url,
-                            letter_preview=draft.text,
-                        )
-                except Exception as e:
-                    logger.error(f"Cover letter gen failed for {v.hh_id}: {e}")
 
         return scored_count, letters_count
 
@@ -843,7 +1004,7 @@ class Pipeline:
     async def _save_vacancy(
         self,
         v: VacancyShort,
-        score: float,
+        score: float | None,
         reasoning: str,
         status: str,
         profile_id: int,
