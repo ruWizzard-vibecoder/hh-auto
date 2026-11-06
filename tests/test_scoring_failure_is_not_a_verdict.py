@@ -361,3 +361,61 @@ def test_nested_objects_are_flattened_to_text():
 ])
 def test_a_jsonb_list_column_always_gets_a_list(value, expected):
     assert _as_json_list(value) == expected
+
+
+# ─── No money means stop, not grind ───────────────────────────────────────
+
+@pytest.mark.asyncio
+async def test_a_quota_failure_stops_the_cycle_instead_of_walking_every_profile():
+    """Every remaining vacancy would hit the same wall and be billed for the try."""
+    from src.services.pipeline import Pipeline
+
+    pipeline = Pipeline(db=AsyncMock(), hh_client=AsyncMock(), hh_browser=AsyncMock())
+    profiles = [
+        SimpleNamespace(id=1, name="первый", resume_id="r1"),
+        SimpleNamespace(id=2, name="второй", resume_id="r2"),
+    ]
+    visited: list[str] = []
+
+    async def fake_process(profile):
+        visited.append(profile.name)
+        raise AIQuotaExhausted("402 prepayment credits are depleted")
+
+    pipeline._get_active_profiles = AsyncMock(return_value=profiles)
+    pipeline._retry_failed_scores = AsyncMock(return_value=0)
+    pipeline._process_profile = fake_process
+    pipeline._log_event = AsyncMock()
+
+    await pipeline.run_search_cycle()
+
+    assert visited == ["первый"]
+    logged = [call.args[0] for call in pipeline._log_event.await_args_list]
+    assert "search_cycle_aborted" in logged
+
+
+@pytest.mark.asyncio
+async def test_an_ordinary_profile_error_does_not_stop_the_other_profiles():
+    """The other direction: one bad profile must not cancel the rest of the run."""
+    from src.services.pipeline import Pipeline
+
+    pipeline = Pipeline(db=AsyncMock(), hh_client=AsyncMock(), hh_browser=AsyncMock())
+    profiles = [
+        SimpleNamespace(id=1, name="первый", resume_id="r1"),
+        SimpleNamespace(id=2, name="второй", resume_id="r2"),
+    ]
+    visited: list[str] = []
+
+    async def fake_process(profile):
+        visited.append(profile.name)
+        if profile.name == "первый":
+            raise RuntimeError("hh.ru вернул 500")
+        return 1, 1, 0
+
+    pipeline._get_active_profiles = AsyncMock(return_value=profiles)
+    pipeline._retry_failed_scores = AsyncMock(return_value=0)
+    pipeline._process_profile = fake_process
+    pipeline._log_event = AsyncMock()
+
+    await pipeline.run_search_cycle()
+
+    assert visited == ["первый", "второй"]
